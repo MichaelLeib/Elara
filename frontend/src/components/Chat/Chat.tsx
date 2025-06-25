@@ -10,6 +10,9 @@ interface ChatProps {
   isLoading: boolean;
   onNewChat: () => void;
   onSendMessage: (message: string, model: string, attachments?: File[]) => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
 }
 
 const chatContainerStyle = css`
@@ -30,6 +33,9 @@ export function Chat({
   isLoading,
   onNewChat,
   onSendMessage,
+  onLoadMore,
+  hasMore = false,
+  isLoadingMore = false,
 }: ChatProps) {
   return (
     <div css={chatContainerStyle}>
@@ -39,6 +45,9 @@ export function Chat({
           messages={messages}
           isThinking={isLoading}
           onNewChat={onNewChat}
+          onLoadMore={onLoadMore}
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
         />
       </ErrorBoundary>
 

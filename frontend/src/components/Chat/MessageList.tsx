@@ -1,6 +1,6 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import type { MessageListProps } from "./models";
 import dayjs from "dayjs";
 import { Loader } from "../UI/Loader";
@@ -242,6 +242,26 @@ const thinkingContainerStyle = css`
   }
 `;
 
+const loadMoreStyle = css`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  border-radius: 0.75rem;
+  margin: 1rem 0;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+
+  @media (prefers-color-scheme: dark) {
+    background: rgba(30, 41, 59, 0.8);
+    color: #9ca3af;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+`;
+
 const formatMessage = (message: string) => {
   if (!message) return "";
 
@@ -270,8 +290,12 @@ const formatMessage = (message: string) => {
 export function MessageList({
   messages,
   isThinking = false,
+  onLoadMore,
+  hasMore = false,
+  isLoadingMore = false,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollThreshold = 100; // pixels from top to trigger load more
 
   // Filter out any invalid messages
   const validMessages = messages.filter((msg) => {
@@ -281,6 +305,18 @@ export function MessageList({
     }
     return true;
   });
+
+  // Handle scroll to detect when to load more messages
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current || !onLoadMore || !hasMore || isLoadingMore) {
+      return;
+    }
+
+    const { scrollTop } = containerRef.current;
+    if (scrollTop <= scrollThreshold) {
+      onLoadMore();
+    }
+  }, [onLoadMore, hasMore, isLoadingMore, scrollThreshold]);
 
   // Auto-scroll to bottom when messages change or thinking state changes
   useEffect(() => {
@@ -318,6 +354,7 @@ export function MessageList({
     <div
       ref={containerRef}
       css={containerStyle}
+      onScroll={handleScroll}
     >
       <div
         css={{
@@ -328,6 +365,22 @@ export function MessageList({
           paddingTop: "3rem",
         }}
       >
+        {/* Load more indicator */}
+        {hasMore && (
+          <div css={loadMoreStyle}>
+            {isLoadingMore ? (
+              <>
+                <Loader />
+                <span style={{ marginLeft: "0.5rem" }}>
+                  Loading more messages...
+                </span>
+              </>
+            ) : (
+              <span>Scroll up to load more messages</span>
+            )}
+          </div>
+        )}
+
         {validMessages.map((msg, index) => {
           return (
             <div

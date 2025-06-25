@@ -1,6 +1,6 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SettingsDialog } from "../Settings/SettingsDialog";
 import { Icon } from "../UI/Icon";
 import { ChatHistory } from "./ChatHistory";
@@ -187,6 +187,24 @@ export function SidePane({
 }: SidePaneProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Auto-open drawer on large screens
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 1280) {
+        setIsOpen(true);
+      }
+    };
+
+    // Set initial state
+    handleResize();
+
+    // Add event listener
+    window.addEventListener("resize", handleResize);
+
+    // Cleanup
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const toggleDrawer = () => {
     const newState = !isOpen;

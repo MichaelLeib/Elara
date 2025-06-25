@@ -12,6 +12,9 @@ export type MessageListProps = {
   isThinking?: boolean;
   className?: string;
   onNewChat?: () => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
 };
 
 export type MessageInputProps = {

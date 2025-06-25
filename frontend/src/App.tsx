@@ -6,6 +6,7 @@ import { Chat } from "./components/Chat/Chat";
 import { SidePane } from "./components/SidePane/SidePane";
 import { ErrorBoundary } from "./ErrorBoundary";
 import type { Message } from "./components/Chat/models";
+import { useChatSessionMessages } from "./hooks/useChatSessionMessages";
 
 const appStyle = css`
   display: flex;
@@ -120,31 +121,30 @@ const buttonStyle = (isPrimary: boolean) => css`
 
 function App() {
   const [selectedChatIndex, setSelectedChatIndex] = useState<number | null>(1);
-  const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<number | null>(null);
 
+  const {
+    messages: currentMessages,
+    addMessage,
+    updateMessage,
+    loadMessages,
+    loadMore,
+    isLoading: isLoadingMessages,
+    hasMore,
+    clearMessages,
+  } = useChatSessionMessages();
+
   const handleSelectChat = async (chatIndex: number) => {
     setSelectedChatIndex(chatIndex);
-    setIsLoading(true);
+    clearMessages(); // Clear previous messages
+    await loadMessages(chatIndex, 50, 0); // Load first 50 messages
+  };
 
-    try {
-      const response = await fetch(
-        `http://localhost:8000/api/chat-sessions/${chatIndex}`
-      );
-      if (response.ok) {
-        const session = await response.json();
-        setCurrentMessages(session.messages || []);
-      } else {
-        console.error("Failed to load chat session");
-        setCurrentMessages([]);
-      }
-    } catch (error) {
-      console.error("Error loading chat session:", error);
-      setCurrentMessages([]);
-    } finally {
-      setIsLoading(false);
+  const handleLoadMore = async () => {
+    if (selectedChatIndex) {
+      await loadMore(selectedChatIndex, 50);
     }
   };
 
@@ -162,7 +162,7 @@ function App() {
         const data = await response.json();
         const newChatIndex = data.session.index;
         setSelectedChatIndex(newChatIndex);
-        setCurrentMessages([]);
+        clearMessages();
       }
     } catch (error) {
       console.error("Error creating new chat:", error);
@@ -176,29 +176,24 @@ function App() {
   ) => {
     if (!message.trim() || !selectedChatIndex) return;
 
-    console.log("Sending message:", {
-      message,
-      model,
-      attachments,
-      chatIndex: selectedChatIndex,
-    });
+    console.log("Sending message:", { message, model, attachments });
 
     setIsLoading(true);
 
-    // Add user message to UI immediately
+    // Add user message
     const userMessage: Message = {
       user_id: "user",
       message: message,
       created_at: new Date().toISOString(),
-      id: Date.now().toString(),
+      id: "",
       model: model,
       updated_at: new Date().toISOString(),
     };
 
-    setCurrentMessages((prev) => [...prev, userMessage]);
+    addMessage(userMessage);
 
     // Add assistant message placeholder
-    const assistantMessageId = (Date.now() + 1).toString();
+    const assistantMessageId = Date.now().toString();
     const assistantMessage: Message = {
       user_id: "assistant",
       message: "",
@@ -208,7 +203,7 @@ function App() {
       updated_at: new Date().toISOString(),
     };
 
-    setCurrentMessages((prev) => [...prev, assistantMessage]);
+    addMessage(assistantMessage);
 
     try {
       // Create a custom WebSocket connection with chat_index
@@ -238,56 +233,38 @@ function App() {
 
             if (data.type === "chunk") {
               // Update with new chunk
-              setCurrentMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, message: msg.message + data.content }
-                    : msg
-                )
-              );
+              updateMessage(assistantMessageId, {
+                message:
+                  currentMessages.find((msg) => msg.id === assistantMessageId)
+                    ?.message + data.content || data.content,
+              });
             } else if (data.type === "done") {
               // Mark as complete
-              setCurrentMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, updated_at: new Date().toISOString() }
-                    : msg
-                )
-              );
+              updateMessage(assistantMessageId, {
+                updated_at: new Date().toISOString(),
+              });
               ws.close();
               resolve();
             } else if (data.type === "error") {
               // Update the assistant message with error
-              setCurrentMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, message: `Error: ${data.content}` }
-                    : msg
-                )
-              );
+              updateMessage(assistantMessageId, {
+                message: `Error: ${data.content}`,
+              });
               ws.close();
               reject(new Error(data.content));
             } else {
               // Fallback for non-streaming responses
-              setCurrentMessages((prev) =>
-                prev.map((msg) =>
-                  msg.id === assistantMessageId
-                    ? { ...msg, message: event.data }
-                    : msg
-                )
-              );
+              updateMessage(assistantMessageId, {
+                message: event.data,
+              });
               ws.close();
               resolve();
             }
           } catch {
             // If parsing fails, treat as plain text
-            setCurrentMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMessageId
-                  ? { ...msg, message: event.data }
-                  : msg
-              )
-            );
+            updateMessage(assistantMessageId, {
+              message: event.data,
+            });
             ws.close();
             resolve();
           }
@@ -304,18 +281,11 @@ function App() {
       });
     } catch (error) {
       console.error("Failed to send message:", error);
-      setCurrentMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessageId
-            ? {
-                ...msg,
-                message: `Sorry, there was an error sending your message: ${
-                  error instanceof Error ? error.message : "Unknown error"
-                }`,
-              }
-            : msg
-        )
-      );
+      updateMessage(assistantMessageId, {
+        message: `Sorry, there was an error sending your message: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
+      });
     } finally {
       setIsLoading(false);
     }
@@ -373,9 +343,12 @@ function App() {
         <div css={chatContainerStyle}>
           <Chat
             messages={currentMessages}
-            isLoading={isLoading}
+            isLoading={isLoading || isLoadingMessages}
             onNewChat={handleNewChat}
             onSendMessage={handleSendMessage}
+            onLoadMore={handleLoadMore}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMessages}
           />
         </div>
       </div>
