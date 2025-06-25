@@ -266,7 +266,7 @@ const enterButtonStyle = css`
   background: rgba(30, 41, 59, 0.8);
   border: none;
   border-radius: 0.5rem;
-  padding: 0.3rem 0.5rem;
+  padding: 0.2rem 0.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -438,7 +438,7 @@ export function MessageList({
                         onClick={() => onAppendToInput(msg.message)}
                       >
                         <Icon
-                          name="enter"
+                          name="arrow-down"
                           size={6}
                         />
                       </button>

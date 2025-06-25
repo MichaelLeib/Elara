@@ -54,6 +54,8 @@ export function Icon({
         return "⌄";
       case "enter":
         return "↵";
+      case "arrow-down":
+        return "↓";
       default:
         return iconName;
     }
