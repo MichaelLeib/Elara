@@ -361,8 +361,16 @@
       "model": "tinyllama:1.1b",
       "created_at": "2025-06-25 16:54:37.952097",
       "updated_at": "2025-06-25 16:54:37.952100"
+    },
+    {
+      "id": "e13f83a1-b0ab-436e-b7e4-d80ac06cc0dc",
+      "user_id": "user",
+      "message": "what is the best ai model for a ChatGPT like application on a macbook air m1 8gb?",
+      "model": "llama3:latest",
+      "created_at": "2025-06-25 21:53:41.109943",
+      "updated_at": "2025-06-25 21:53:41.109946"
     }
   ],
   "created_at": "2025-06-25 16:05:32.934871",
-  "updated_at": "2025-06-25 16:54:37.952653"
+  "updated_at": "2025-06-25 21:53:41.111543"
 }

@@ -8,7 +8,7 @@ interface LoaderProps {
   className?: string;
 }
 
-const containerStyle = (size: string) => css`
+const loaderContainerStyle = (size: string) => css`
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -85,7 +85,7 @@ export function Loader({ size = "sm", className = "" }: LoaderProps) {
 
   return (
     <div
-      css={containerStyle(size)}
+      css={loaderContainerStyle(size)}
       className={className}
     >
       {/* Loading Text */}

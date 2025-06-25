@@ -33,7 +33,7 @@ const overlayStyle = css`
   z-index: 1000;
 `;
 
-const dialogStyle = css`
+const settingsDialogStyle = css`
   background: white;
   border-radius: 12px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
@@ -44,15 +44,35 @@ const dialogStyle = css`
   overflow: hidden;
   display: flex;
   flex-direction: column;
+
+  @media (prefers-color-scheme: dark) {
+    background: #1e293b;
+  }
 `;
 
-const headerStyle = css`
+const settingsHeaderStyle = css`
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 24px 24px 12px 24px;
   border-bottom: 1px solid #e5e7eb;
   background: #f9fafb;
+
+  @media (prefers-color-scheme: dark) {
+    border-bottom: 1px solid #334155;
+    background: #1e293b;
+  }
+`;
+
+const emptyStateStyle = css`
+  padding: 16px;
+  text-align: center;
+  color: #9ca3af;
+
+  @media (prefers-color-scheme: dark) {
+    color: #9ca3af;
+    background: #1e293b;
+  }
 `;
 
 const titleStyle = css`
@@ -159,6 +179,11 @@ const modelCardStyle = css`
   &:hover {
     border-color: #3b82f6;
   }
+
+  @media (prefers-color-scheme: dark) {
+    background: #1e293b;
+    border: 1px solid #334155;
+  }
 `;
 
 const modelHeaderStyle = css`
@@ -173,6 +198,10 @@ const modelNameStyle = css`
   font-weight: 600;
   color: #1f2937;
   margin: 0;
+
+  @media (prefers-color-scheme: dark) {
+    color: #f1f5f9;
+  }
 `;
 
 const modelDescriptionStyle = css`
@@ -180,6 +209,10 @@ const modelDescriptionStyle = css`
   font-size: 14px;
   margin-bottom: 12px;
   line-height: 1.5;
+
+  @media (prefers-color-scheme: dark) {
+    color: #f1f5f9;
+  }
 `;
 
 const modelDetailsStyle = css`
@@ -187,6 +220,10 @@ const modelDetailsStyle = css`
   grid-template-columns: 1fr 1fr;
   gap: 16px;
   margin-bottom: 12px;
+
+  @media (prefers-color-scheme: dark) {
+    color: #f1f5f9;
+  }
 `;
 
 const detailSectionStyle = css`
@@ -197,6 +234,10 @@ const detailSectionStyle = css`
     margin: 0 0 4px 0;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+
+    @media (prefers-color-scheme: dark) {
+      color: #f1f5f9;
+    }
   }
 
   ul {
@@ -204,10 +245,18 @@ const detailSectionStyle = css`
     padding-left: 16px;
     font-size: 13px;
     color: #6b7280;
+
+    @media (prefers-color-scheme: dark) {
+      color: #f1f5f9;
+    }
   }
 
   li {
     margin-bottom: 2px;
+
+    @media (prefers-color-scheme: dark) {
+      color: #f1f5f9;
+    }
   }
 `;
 
@@ -258,20 +307,33 @@ const systemInfoStyle = css`
   background: #f3f4f6;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 0px 16px 0px 16px;
-  margin-bottom: 24px;
+  padding: 10px 16px 10px 16px;
+  margin: 10px 0px 10px 0px;
+
+  @media (prefers-color-scheme: dark) {
+    background: #1e293b;
+    border: 1px solid #334155;
+  }
 
   h3 {
     font-size: 14px;
     font-weight: 600;
     color: #374151;
     margin: 0 0 8px 0;
+
+    @media (prefers-color-scheme: dark) {
+      color: #f1f5f9;
+    }
   }
 
   p {
     font-size: 13px;
     color: #6b7280;
     margin: 0;
+
+    @media (prefers-color-scheme: dark) {
+      color: #f1f5f9;
+    }
   }
 `;
 
@@ -412,10 +474,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       onClick={onClose}
     >
       <div
-        css={dialogStyle}
+        css={settingsDialogStyle}
         onClick={(e) => e.stopPropagation()}
       >
-        <div css={headerStyle}>
+        <div css={settingsHeaderStyle}>
           <h2 css={titleStyle}>Settings</h2>
           <button
             css={closeButtonStyle}
@@ -490,13 +552,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 </div>
               ))}
               {memoryEntries.length === 0 && (
-                <div
-                  style={{
-                    padding: "16px",
-                    textAlign: "center",
-                    color: "#9ca3af",
-                  }}
-                >
+                <div css={emptyStateStyle}>
                   No memory entries yet. Add some to help the AI remember
                   important information.
                 </div>

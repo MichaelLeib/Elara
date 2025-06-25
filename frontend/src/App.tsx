@@ -15,7 +15,7 @@ const appStyle = css`
   width: 100vw;
 `;
 
-const chatContainerStyle = css`
+const appChatContainerStyle = css`
   position: relative;
   display: flex;
   flex-direction: row;
@@ -340,7 +340,7 @@ function App() {
           onNewChat={handleNewChat}
           onDeleteChat={handleDeleteChat}
         />
-        <div css={chatContainerStyle}>
+        <div css={appChatContainerStyle}>
           <Chat
             messages={currentMessages}
             isLoading={isLoading || isLoadingMessages}

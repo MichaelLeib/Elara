@@ -52,6 +52,8 @@ export function Icon({
         return "ℹ️";
       case "chevron-down":
         return "⌄";
+      case "enter":
+        return "↵";
       default:
         return iconName;
     }

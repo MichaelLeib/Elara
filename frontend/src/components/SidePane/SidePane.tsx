@@ -123,11 +123,6 @@ const drawerHeaderStyle = css`
   margin-top: 2rem;
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-
-  @media (prefers-color-scheme: dark) {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
 `;
 
 const drawerTitleStyle = css`

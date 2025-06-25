@@ -2,6 +2,7 @@
 import { css } from "@emotion/react";
 import { useState, useEffect } from "react";
 import { Icon } from "../UI/Icon";
+import dayjs from "dayjs";
 
 interface ChatSession {
   index: number;
@@ -19,12 +20,13 @@ interface ChatHistoryProps {
   onDeleteChat: (chatIndex: number) => void;
 }
 
-const containerStyle = css`
+const chatHistoryContainerStyle = css`
   display: flex;
   flex-direction: column;
   height: 100%;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-right: 1px solid #e2e8f0;
+  border-radius: 1.5rem;
 
   @media (prefers-color-scheme: dark) {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -32,18 +34,18 @@ const containerStyle = css`
   }
 `;
 
-const headerStyle = css`
+const chatHistoryHeaderStyle = css`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.5rem;
+  padding: 0.5rem 1rem 0.5rem 1rem;
+  margin: 0.5rem;
   border-bottom: 1px solid #e2e8f0;
-  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
+  border-radius: 1rem;
 
   @media (prefers-color-scheme: dark) {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(30, 41, 59, 0.8);
   }
 `;
 
@@ -114,6 +116,7 @@ const chatItemStyle = (isSelected: boolean) => css`
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 1rem;
+  min-width: 200px;
   margin-bottom: 0.5rem;
   border-radius: 0.75rem;
   background: ${isSelected
@@ -152,18 +155,24 @@ const chatInfoStyle = css`
 `;
 
 const chatTitleStyle = css`
-  font-size: 0.95rem;
+  display: flex;
+  flex-direction: column;
+  font-size: 1rem;
   font-weight: 500;
-  margin: 0 0 0.25rem 0;
+  margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `;
 
-const chatMetaStyle = css`
-  font-size: 0.75rem;
+const chatMessagesNumberStyle = css`
+  font-size: 0.7rem;
   opacity: 0.7;
-  margin: 0;
+`;
+
+const chatUpdatedAtStyle = css`
+  font-size: 0.5rem;
+  opacity: 0.7;
 `;
 
 const deleteButtonStyle = css`
@@ -331,28 +340,10 @@ export function ChatHistory({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } else if (diffInHours < 168) {
-      // 7 days
-      return date.toLocaleDateString([], { weekday: "short" });
-    } else {
-      return date.toLocaleDateString([], { month: "short", day: "numeric" });
-    }
-  };
-
   if (loading) {
     return (
-      <div css={containerStyle}>
-        <div css={headerStyle}>
+      <div css={chatHistoryContainerStyle}>
+        <div css={chatHistoryHeaderStyle}>
           <h2 css={titleStyle}>Chat History</h2>
         </div>
         <div css={emptyStateStyle}>
@@ -364,8 +355,8 @@ export function ChatHistory({
   }
 
   return (
-    <div css={containerStyle}>
-      <div css={headerStyle}>
+    <div css={chatHistoryContainerStyle}>
+      <div css={chatHistoryHeaderStyle}>
         <h2 css={titleStyle}>Chats</h2>
         <button
           css={newChatButtonStyle}
@@ -406,10 +397,12 @@ export function ChatHistory({
                 ) : (
                   <>
                     <h3 css={chatTitleStyle}>{chat.title}</h3>
-                    <p css={chatMetaStyle}>
-                      {chat.message_count} messages •{" "}
-                      {formatDate(chat.updated_at)}
-                    </p>
+                    <div css={chatMessagesNumberStyle}>
+                      {chat.message_count} messages
+                    </div>
+                    <div css={chatUpdatedAtStyle}>
+                      {dayjs(chat.updated_at).format("HH:mm MMM D, YYYY")}
+                    </div>
                   </>
                 )}
               </div>

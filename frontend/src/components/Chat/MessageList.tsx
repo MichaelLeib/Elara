@@ -1,11 +1,16 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
 import { useEffect, useRef, useCallback } from "react";
-import type { MessageListProps } from "./models";
+import type { MessageListProps as OriginalMessageListProps } from "./models";
 import dayjs from "dayjs";
 import { Loader } from "../UI/Loader";
+import { Icon } from "../UI/Icon";
 
-const containerStyle = css`
+interface MessageListProps extends OriginalMessageListProps {
+  onAppendToInput?: (text: string) => void;
+}
+
+const messageListContainerStyle = css`
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -15,9 +20,12 @@ const containerStyle = css`
   padding: 1.5rem;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   position: relative;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 
   @media (prefers-color-scheme: dark) {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   /* Custom scrollbar */
@@ -218,18 +226,7 @@ const thinkingContainerStyle = css`
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 1.25rem;
-  border-bottom-left-radius: 0.5rem;
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   animation: pulse 2s ease-in-out infinite;
-
-  @media (prefers-color-scheme: dark) {
-    background: rgba(30, 41, 59, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
 
   @keyframes pulse {
     0%,
@@ -259,6 +256,29 @@ const loadMoreStyle = css`
     background: rgba(30, 41, 59, 0.8);
     color: #9ca3af;
     border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+`;
+
+const enterButtonStyle = css`
+  position: absolute;
+  bottom: 0.05rem;
+  right: 0.05rem;
+  background: rgba(30, 41, 59, 0.8);
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  color: #60a5fa;
+  transition: background 0.2s;
+  opacity: 0.85;
+  &:hover {
+    background: #1d4ed8;
+    color: #fff;
+    opacity: 1;
   }
 `;
 
@@ -293,6 +313,7 @@ export function MessageList({
   onLoadMore,
   hasMore = false,
   isLoadingMore = false,
+  onAppendToInput,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollThreshold = 100; // pixels from top to trigger load more
@@ -353,7 +374,7 @@ export function MessageList({
   return (
     <div
       ref={containerRef}
-      css={containerStyle}
+      css={messageListContainerStyle}
       onScroll={handleScroll}
     >
       <div
@@ -399,13 +420,30 @@ export function MessageList({
                     : "[Invalid model]"}
                 </div>
               )}
-              <div css={messageBubbleStyle(msg.user_id === "user")}>
+              <div
+                css={messageBubbleStyle(msg.user_id === "user")}
+                style={{ position: "relative" }}
+              >
                 {msg.message === "" && isThinking ? (
                   <div css={thinkingContainerStyle}>
                     <Loader />
                   </div>
                 ) : typeof msg.message === "string" ? (
-                  formatMessage(msg.message)
+                  <>
+                    {formatMessage(msg.message)}
+                    {msg.user_id === "user" && onAppendToInput && (
+                      <button
+                        css={enterButtonStyle}
+                        title="Copy to input"
+                        onClick={() => onAppendToInput(msg.message)}
+                      >
+                        <Icon
+                          name="enter"
+                          size={6}
+                        />
+                      </button>
+                    )}
+                  </>
                 ) : (
                   "[Invalid message object]"
                 )}

@@ -1,23 +1,27 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
-import React, { useState, useRef, useEffect } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import type { ChangeEvent } from "react";
 import { getModels } from "../../api/chatApi";
 import type { MessageInputProps, Model } from "./models";
 import { ErrorBoundary } from "../../ErrorBoundary";
 
-const containerStyle = css`
+const messageInputContainerStyle = css`
   width: 100%;
   max-width: 64rem;
   margin: 0 auto;
   padding: 1.5rem 1.5rem 2rem 1.5rem;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
-  border-top: 1px solid rgba(0, 0, 0, 0.05);
 
   @media (prefers-color-scheme: dark) {
     background: rgba(15, 23, 42, 0.8);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
   }
 `;
 
@@ -378,268 +382,284 @@ const overlayStyle = css`
   z-index: 0;
 `;
 
-export function MessageInput({
-  onSendMessage,
-  disabled = false,
-  placeholder = "Type your message...",
-}: MessageInputProps) {
-  const [message, setMessage] = useState("");
-  const [models, setModels] = useState<Model[]>([]);
-  const [selectedModel, setSelectedModel] = useState<Model | null>(null);
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isLoadingModels, setIsLoadingModels] = useState(true);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+export interface MessageInputHandle {
+  appendToInput: (text: string) => void;
+}
 
-  // Fetch models on component mount
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        setIsLoadingModels(true);
-        const models = await getModels();
+export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
+  function MessageInput(
+    { onSendMessage, disabled = false, placeholder = "Type your message..." },
+    ref
+  ) {
+    const [message, setMessage] = useState("");
+    const [models, setModels] = useState<Model[]>([]);
+    const [selectedModel, setSelectedModel] = useState<Model | null>(null);
+    const [attachments, setAttachments] = useState<File[]>([]);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isLoadingModels, setIsLoadingModels] = useState(true);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-        setModels(models.models);
-        setSelectedModel(models.models[0]);
-      } catch (error) {
-        console.error("Failed to fetch models:", error);
-        // Fallback to default models if API fails
-        const fallbackModels: Model[] = [
-          { name: "GPT-4" },
-          { name: "GPT-3.5 Turbo" },
-          { name: "Claude-3" },
-        ];
-        setModels(fallbackModels);
-        setSelectedModel(fallbackModels[0]);
-      } finally {
-        setIsLoadingModels(false);
+    // Fetch models on component mount
+    useEffect(() => {
+      const fetchModels = async () => {
+        try {
+          setIsLoadingModels(true);
+          const models = await getModels();
+
+          setModels(models.models);
+          setSelectedModel(models.models[0]);
+        } catch (error) {
+          console.error("Failed to fetch models:", error);
+          // Fallback to default models if API fails
+          const fallbackModels: Model[] = [
+            { name: "GPT-4" },
+            { name: "GPT-3.5 Turbo" },
+            { name: "Claude-3" },
+          ];
+          setModels(fallbackModels);
+          setSelectedModel(fallbackModels[0]);
+        } finally {
+          setIsLoadingModels(false);
+        }
+      };
+
+      fetchModels();
+    }, []);
+
+    useEffect(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }, []);
+
+    useImperativeHandle(ref, () => ({
+      appendToInput: (text: string) => {
+        setMessage((prev) => (prev ? prev + "\n" + text : text));
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      },
+    }));
+
+    const handleSend = () => {
+      if (!message.trim() || disabled || !selectedModel) return;
+
+      onSendMessage(message, selectedModel.name, attachments);
+      setMessage("");
+      setAttachments([]);
+
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
       }
     };
 
-    fetchModels();
-  }, []);
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    };
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, []);
+    const handleTextareaChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+      setMessage(e.target.value);
 
-  const handleSend = () => {
-    if (!message.trim() || disabled || !selectedModel) return;
+      // Auto-resize textarea
+      const textarea = e.target;
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+    };
 
-    onSendMessage(message, selectedModel.name, attachments);
-    setMessage("");
-    setAttachments([]);
+    const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      setAttachments((prev) => [...prev, ...files]);
 
-    // Reset textarea height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
-  };
+      // Reset input value to allow selecting the same file again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
+    const removeAttachment = (index: number) => {
+      setAttachments((prev) => prev.filter((_, i) => i !== index));
+    };
 
-  const handleTextareaChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(e.target.value);
+    const formatFileSize = (bytes: number): string => {
+      if (bytes === 0) return "0 Bytes";
+      const k = 1024;
+      const sizes = ["Bytes", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    };
 
-    // Auto-resize textarea
-    const textarea = e.target;
-    textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
-  };
-
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    setAttachments((prev) => [...prev, ...files]);
-
-    // Reset input value to allow selecting the same file again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  };
-
-  const removeAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-  };
-
-  return (
-    <div css={containerStyle}>
-      {/* Attachments Preview */}
-      <ErrorBoundary>
-        {attachments.length > 0 && (
-          <div css={attachmentsPreviewStyle}>
-            {attachments.map((file, index) => (
-              <div
-                key={index}
-                css={attachmentItemStyle}
-              >
-                <span css={attachmentTextStyle}>
-                  📎 {file.name} ({formatFileSize(file.size)})
-                </span>
-                <button
-                  onClick={() => removeAttachment(index)}
-                  css={removeButtonStyle}
-                  type="button"
+    return (
+      <div css={messageInputContainerStyle}>
+        {/* Attachments Preview */}
+        <ErrorBoundary>
+          {attachments.length > 0 && (
+            <div css={attachmentsPreviewStyle}>
+              {attachments.map((file, index) => (
+                <div
+                  key={index}
+                  css={attachmentItemStyle}
                 >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </ErrorBoundary>
-
-      {/* Main Input Area */}
-      <div css={mainInputAreaStyle}>
-        {/* File Attachment Button */}
-        <ErrorBoundary>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
-            css={fileButtonStyle}
-            type="button"
-            title="Add attachment"
-          >
-            <svg
-              width="20"
-              height="20"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={handleFileSelect}
-            css={hiddenInputStyle}
-            accept="*/*"
-          />
-        </ErrorBoundary>
-
-        {/* Model Selection Dropdown */}
-        <ErrorBoundary>
-          <div css={dropdownContainerStyle}>
-            <button
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              disabled={disabled || isLoadingModels}
-              css={dropdownButtonStyle}
-              type="button"
-            >
-              {isLoadingModels ? (
-                <div css={loadingSpinnerStyle}>
-                  <div css={spinnerStyle}></div>
-                  <span css={loadingTextStyle}>Loading...</span>
-                </div>
-              ) : (
-                <>
-                  <span css={dropdownTextStyle}>
-                    {typeof selectedModel === "object" && selectedModel
-                      ? typeof selectedModel.name === "string"
-                        ? selectedModel.name
-                        : "Invalid Model"
-                      : "Select Model"}
+                  <span css={attachmentTextStyle}>
+                    📎 {file.name} ({formatFileSize(file.size)})
                   </span>
-                  <svg
-                    css={dropdownIconStyle(isDropdownOpen)}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </>
-              )}
-            </button>
-
-            {isDropdownOpen && models.length > 0 && (
-              <div css={dropdownMenuStyle}>
-                {models.map((model, index) => (
                   <button
-                    key={index}
-                    onClick={() => {
-                      setSelectedModel(model);
-                      setIsDropdownOpen(false);
-                    }}
-                    css={dropdownItemStyle(selectedModel?.name === model.name)}
+                    onClick={() => removeAttachment(index)}
+                    css={removeButtonStyle}
                     type="button"
                   >
-                    <div css={dropdownItemTextStyle}>
-                      {typeof model.name === "string"
-                        ? model.name
-                        : "Invalid Model Name"}
-                    </div>
+                    ×
                   </button>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
         </ErrorBoundary>
 
-        {/* Textarea */}
-        <ErrorBoundary>
-          <div css={textareaContainerStyle}>
-            <textarea
-              ref={textareaRef}
-              value={message}
-              onChange={handleTextareaChange}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
+        {/* Main Input Area */}
+        <div css={mainInputAreaStyle}>
+          {/* File Attachment Button */}
+          <ErrorBoundary>
+            <button
+              onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
-              css={textareaStyle}
-              rows={1}
+              css={fileButtonStyle}
+              type="button"
+              title="Add attachment"
+            >
+              <svg
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              css={hiddenInputStyle}
+              accept="*/*"
             />
-          </div>
-        </ErrorBoundary>
+          </ErrorBoundary>
 
-        {/* Send Button */}
-        <ErrorBoundary>
-          <button
-            onClick={handleSend}
-            disabled={!message.trim() || disabled || !selectedModel}
-            css={sendButtonStyle}
-            type="button"
-            title="Send message"
-          >
-            →
-          </button>
-        </ErrorBoundary>
+          {/* Model Selection Dropdown */}
+          <ErrorBoundary>
+            <div css={dropdownContainerStyle}>
+              <button
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                disabled={disabled || isLoadingModels}
+                css={dropdownButtonStyle}
+                type="button"
+              >
+                {isLoadingModels ? (
+                  <div css={loadingSpinnerStyle}>
+                    <div css={spinnerStyle}></div>
+                    <span css={loadingTextStyle}>Loading...</span>
+                  </div>
+                ) : (
+                  <>
+                    <span css={dropdownTextStyle}>
+                      {typeof selectedModel === "object" && selectedModel
+                        ? typeof selectedModel.name === "string"
+                          ? selectedModel.name
+                          : "Invalid Model"
+                        : "Select Model"}
+                    </span>
+                    <svg
+                      css={dropdownIconStyle(isDropdownOpen)}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </>
+                )}
+              </button>
+
+              {isDropdownOpen && models.length > 0 && (
+                <div css={dropdownMenuStyle}>
+                  {models.map((model, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        setSelectedModel(model);
+                        setIsDropdownOpen(false);
+                      }}
+                      css={dropdownItemStyle(
+                        selectedModel?.name === model.name
+                      )}
+                      type="button"
+                    >
+                      <div css={dropdownItemTextStyle}>
+                        {typeof model.name === "string"
+                          ? model.name
+                          : "Invalid Model Name"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </ErrorBoundary>
+
+          {/* Textarea */}
+          <ErrorBoundary>
+            <div css={textareaContainerStyle}>
+              <textarea
+                ref={textareaRef}
+                value={message}
+                onChange={handleTextareaChange}
+                onKeyDown={handleKeyDown}
+                placeholder={placeholder}
+                disabled={disabled}
+                css={textareaStyle}
+                rows={1}
+              />
+            </div>
+          </ErrorBoundary>
+
+          {/* Send Button */}
+          <ErrorBoundary>
+            <button
+              onClick={handleSend}
+              disabled={!message.trim() || disabled || !selectedModel}
+              css={sendButtonStyle}
+              type="button"
+              title="Send message"
+            >
+              →
+            </button>
+          </ErrorBoundary>
+        </div>
+
+        {/* Click outside to close dropdown */}
+        {isDropdownOpen && (
+          <div
+            css={overlayStyle}
+            onClick={() => setIsDropdownOpen(false)}
+          />
+        )}
       </div>
-
-      {/* Click outside to close dropdown */}
-      {isDropdownOpen && (
-        <div
-          css={overlayStyle}
-          onClick={() => setIsDropdownOpen(false)}
-        />
-      )}
-    </div>
-  );
-}
+    );
+  }
+);

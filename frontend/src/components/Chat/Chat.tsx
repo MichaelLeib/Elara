@@ -1,9 +1,11 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
 import { MessageInput } from "./MessageInput";
+import type { MessageInputHandle } from "./MessageInput";
 import type { Message } from "./models";
 import { MessageList } from "./MessageList";
 import { ErrorBoundary } from "../../ErrorBoundary";
+import { useRef } from "react";
 
 interface ChatProps {
   messages: Message[];
@@ -22,7 +24,7 @@ const chatContainerStyle = css`
   margin: 0 auto;
 `;
 
-const messageInputContainerStyle = css`
+const chatMessageInputContainerStyle = css`
   position: sticky;
   bottom: 0;
   width: 100%;
@@ -37,6 +39,12 @@ export function Chat({
   hasMore = false,
   isLoadingMore = false,
 }: ChatProps) {
+  const messageInputRef = useRef<MessageInputHandle>(null);
+
+  const handleAppendToInput = (text: string) => {
+    messageInputRef.current?.appendToInput(text);
+  };
+
   return (
     <div css={chatContainerStyle}>
       {/* Messages Area */}
@@ -48,13 +56,15 @@ export function Chat({
           onLoadMore={onLoadMore}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}
+          onAppendToInput={handleAppendToInput}
         />
       </ErrorBoundary>
 
       {/* Message Input */}
-      <div css={messageInputContainerStyle}>
+      <div css={chatMessageInputContainerStyle}>
         <ErrorBoundary>
           <MessageInput
+            ref={messageInputRef}
             onSendMessage={onSendMessage}
             disabled={isLoading}
             placeholder="Type your message..."
