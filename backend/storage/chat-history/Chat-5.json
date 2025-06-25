@@ -1,0 +1,24 @@
+{
+  "id": "20919b1d-45d6-4ce7-b916-39fbdc3ddbba",
+  "title": "Chat-5",
+  "messages": [
+    {
+      "id": "995c0040-04ec-4959-b1d6-893eb336e11a",
+      "user_id": "user",
+      "message": "When is time?",
+      "model": "tinyllama:1.1b",
+      "created_at": "2025-06-25 16:55:11.845747",
+      "updated_at": "2025-06-25 16:55:11.845750"
+    },
+    {
+      "id": "65a571e1-dcc3-4ea2-b719-dd09f2c290df",
+      "user_id": "assistant",
+      "message": "Time is the measurement of how long an event or action takes. The question \"when is time?\" refers to when the event has occurred or when the action took place, rather than whether the event/action occurred at a specific time. In other words, there are not instances where \"time\" corresponds to time itself.",
+      "model": "tinyllama:1.1b",
+      "created_at": "2025-06-25 16:55:13.490684",
+      "updated_at": "2025-06-25 16:55:13.490694"
+    }
+  ],
+  "created_at": "2025-06-25 16:38:30.382434",
+  "updated_at": "2025-06-25 16:55:13.491043"
+}

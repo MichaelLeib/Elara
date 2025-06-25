@@ -1,0 +1,412 @@
+/** @jsxImportSource @emotion/react */
+import { css } from "@emotion/react";
+import { useState, useEffect } from "react";
+import "./App.css";
+import { Chat } from "./components/Chat/Chat";
+import { SidePane } from "./components/SidePane/SidePane";
+import { ErrorBoundary } from "./ErrorBoundary";
+import type { Message } from "./components/Chat/models";
+
+const appStyle = css`
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  width: 100vw;
+`;
+
+const chatContainerStyle = css`
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-width: 0;
+  padding: 50px;
+  margin: 50px;
+`;
+
+const confirmDialogStyle = css`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+`;
+
+const confirmDialogContentStyle = css`
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  @media (prefers-color-scheme: dark) {
+    background: #1e293b;
+    color: #f1f5f9;
+  }
+`;
+
+const confirmDialogTitleStyle = css`
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  color: #1f2937;
+
+  @media (prefers-color-scheme: dark) {
+    color: #f1f5f9;
+  }
+`;
+
+const confirmDialogMessageStyle = css`
+  font-size: 0.95rem;
+  margin: 0 0 1.5rem 0;
+  color: #6b7280;
+  line-height: 1.5;
+
+  @media (prefers-color-scheme: dark) {
+    color: #9ca3af;
+  }
+`;
+
+const confirmDialogButtonsStyle = css`
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+`;
+
+const buttonStyle = (isPrimary: boolean) => css`
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  ${isPrimary
+    ? `
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    
+    &:hover {
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    }
+  `
+    : `
+    background: #f3f4f6;
+    color: #374151;
+    
+    &:hover {
+      background: #e5e7eb;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      background: #374151;
+      color: #f1f5f9;
+      
+      &:hover {
+        background: #4b5563;
+      }
+    }
+  `}
+`;
+
+function App() {
+  const [selectedChatIndex, setSelectedChatIndex] = useState<number | null>(1);
+  const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [chatToDelete, setChatToDelete] = useState<number | null>(null);
+
+  const handleSelectChat = async (chatIndex: number) => {
+    setSelectedChatIndex(chatIndex);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/chat-sessions/${chatIndex}`
+      );
+      if (response.ok) {
+        const session = await response.json();
+        setCurrentMessages(session.messages || []);
+      } else {
+        console.error("Failed to load chat session");
+        setCurrentMessages([]);
+      }
+    } catch (error) {
+      console.error("Error loading chat session:", error);
+      setCurrentMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/api/chat-sessions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title: null }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newChatIndex = data.session.index;
+        setSelectedChatIndex(newChatIndex);
+        setCurrentMessages([]);
+      }
+    } catch (error) {
+      console.error("Error creating new chat:", error);
+    }
+  };
+
+  const handleSendMessage = async (
+    message: string,
+    model: string,
+    attachments?: File[]
+  ) => {
+    if (!message.trim() || !selectedChatIndex) return;
+
+    console.log("Sending message:", {
+      message,
+      model,
+      attachments,
+      chatIndex: selectedChatIndex,
+    });
+
+    setIsLoading(true);
+
+    // Add user message to UI immediately
+    const userMessage: Message = {
+      user_id: "user",
+      message: message,
+      created_at: new Date().toISOString(),
+      id: Date.now().toString(),
+      model: model,
+      updated_at: new Date().toISOString(),
+    };
+
+    setCurrentMessages((prev) => [...prev, userMessage]);
+
+    // Add assistant message placeholder
+    const assistantMessageId = (Date.now() + 1).toString();
+    const assistantMessage: Message = {
+      user_id: "assistant",
+      message: "",
+      created_at: new Date().toISOString(),
+      id: assistantMessageId,
+      model: model,
+      updated_at: new Date().toISOString(),
+    };
+
+    setCurrentMessages((prev) => [...prev, assistantMessage]);
+
+    try {
+      // Create a custom WebSocket connection with chat_index
+      const wsUrl = `ws://localhost:8000/api/chat`;
+      const ws = new WebSocket(wsUrl);
+
+      await new Promise<void>((resolve, reject) => {
+        ws.onopen = () => {
+          // Send message with chat_index
+          ws.send(
+            JSON.stringify({
+              message,
+              model,
+              chat_index: selectedChatIndex,
+            })
+          );
+          console.log("Message sent to WebSocket:", {
+            message,
+            model,
+            chat_index: selectedChatIndex,
+          });
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+
+            if (data.type === "chunk") {
+              // Update with new chunk
+              setCurrentMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, message: msg.message + data.content }
+                    : msg
+                )
+              );
+            } else if (data.type === "done") {
+              // Mark as complete
+              setCurrentMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, updated_at: new Date().toISOString() }
+                    : msg
+                )
+              );
+              ws.close();
+              resolve();
+            } else if (data.type === "error") {
+              // Update the assistant message with error
+              setCurrentMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, message: `Error: ${data.content}` }
+                    : msg
+                )
+              );
+              ws.close();
+              reject(new Error(data.content));
+            } else {
+              // Fallback for non-streaming responses
+              setCurrentMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMessageId
+                    ? { ...msg, message: event.data }
+                    : msg
+                )
+              );
+              ws.close();
+              resolve();
+            }
+          } catch {
+            // If parsing fails, treat as plain text
+            setCurrentMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId
+                  ? { ...msg, message: event.data }
+                  : msg
+              )
+            );
+            ws.close();
+            resolve();
+          }
+        };
+
+        ws.onerror = (event) => {
+          console.error("WebSocket error:", event);
+          reject(new Error("WebSocket connection failed"));
+        };
+
+        ws.onclose = () => {
+          console.log("WebSocket connection closed");
+        };
+      });
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      setCurrentMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessageId
+            ? {
+                ...msg,
+                message: `Sorry, there was an error sending your message: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+              }
+            : msg
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteChat = (chatIndex: number) => {
+    setChatToDelete(chatIndex);
+    setShowConfirmDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (chatToDelete === null) return;
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/chat-sessions/${chatToDelete}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (response.ok) {
+        // If we deleted the currently selected chat, select the first available one
+        if (selectedChatIndex === chatToDelete) {
+          // This will trigger a refresh in the SidePane
+          setSelectedChatIndex(1);
+        }
+        // Trigger a refresh of the chat list
+        window.dispatchEvent(new CustomEvent("refreshChatList"));
+      }
+    } catch (error) {
+      console.error("Error deleting chat session:", error);
+    } finally {
+      setShowConfirmDialog(false);
+      setChatToDelete(null);
+    }
+  };
+
+  // Load initial chat on mount
+  useEffect(() => {
+    if (selectedChatIndex) {
+      handleSelectChat(selectedChatIndex);
+    }
+  }, [selectedChatIndex]);
+
+  return (
+    <ErrorBoundary>
+      <div css={appStyle}>
+        <SidePane
+          onSelectChat={handleSelectChat}
+          selectedChatIndex={selectedChatIndex}
+          onNewChat={handleNewChat}
+          onDeleteChat={handleDeleteChat}
+        />
+        <div css={chatContainerStyle}>
+          <Chat
+            messages={currentMessages}
+            isLoading={isLoading}
+            onNewChat={handleNewChat}
+            onSendMessage={handleSendMessage}
+          />
+        </div>
+      </div>
+
+      {showConfirmDialog && (
+        <div css={confirmDialogStyle}>
+          <div css={confirmDialogContentStyle}>
+            <h3 css={confirmDialogTitleStyle}>Delete Chat</h3>
+            <p css={confirmDialogMessageStyle}>
+              Are you sure you want to delete this chat? This action cannot be
+              undone.
+            </p>
+            <div css={confirmDialogButtonsStyle}>
+              <button
+                css={buttonStyle(false)}
+                onClick={() => setShowConfirmDialog(false)}
+              >
+                Cancel
+              </button>
+              <button
+                css={buttonStyle(true)}
+                onClick={handleDeleteConfirm}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </ErrorBoundary>
+  );
+}
+
+export default App;

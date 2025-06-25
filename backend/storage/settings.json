@@ -1,0 +1,8 @@
+{
+  "model": {
+    "OLLAMA_URL": "http://localhost:11434/api/generate",
+    "OLLAMA_MODEL": "phi3:mini",
+    "MEMORY_FILE": "storage/memory.json",
+    "CHAT_FILE": "storage/chat-history/chat.json"
+  }
+}

@@ -1,0 +1,173 @@
+### FastAPI Chat App REST Tests
+### Make sure your FastAPI server is running on http://localhost:8000
+### Make sure Ollama is running on http://localhost:11434
+
+### 1. Health Check - Test if the service is running
+GET http://localhost:8000/health
+Content-Type: application/json
+
+###
+
+### 2. Get Available Ollama Models
+GET http://localhost:8000/api/models
+Content-Type: application/json
+
+###
+
+### 2.1. Get Ollama Model Info
+GET http://localhost:8000/api/model-info/phi3:mini
+Content-Type: application/json
+
+###
+
+### 3.1. Diagnostic - Check Ollama Connection and Models
+GET http://localhost:8000/api/diagnostic
+Content-Type: application/json
+
+###
+
+### 4. Chat with AI - Simple message
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "Hello, how are you?"
+}
+
+###
+
+### 4.1. Chat with AI - Specify model explicitly
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "Hello, how are you?",
+    "model": "tinyllama:1.1b"
+}
+
+###
+
+### 4.2. Chat with AI - Try different model (if available)
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "What is the capital of France?",
+    "model": "llama3"
+}
+
+###
+
+### 5. Chat with AI - Ask a question
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "What is the capital of France?"
+}
+
+###
+
+### 6. Chat with AI - Programming question
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "Write a simple Python function to calculate the factorial of a number."
+}
+
+###
+
+### 7. Chat with AI - Creative writing
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "Write a short story about a robot learning to paint."
+}
+
+###
+
+### 8. Test Error Handling - Empty message
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": ""
+}
+
+###
+
+### 9. Test Error Handling - Very long message
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "This is a very long message that might test the limits of the system. " + "A".repeat(1000)
+}
+
+###
+
+### 10. Test with different model (if you want to test with a different model)
+### First, update the OLLAMA_MODEL in main.py to "llama3" or another model you have
+### Then run this test:
+
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "Explain quantum computing in simple terms."
+}
+
+###
+
+### 11. Performance Test - Multiple requests
+### You can run this multiple times to test performance
+
+POST http://localhost:8000/api/chat
+Content-Type: application/json
+
+{
+    "message": "What is 2 + 2?"
+}
+
+###
+
+### 12. Test FastAPI Auto-generated Documentation
+### Open these URLs in your browser to see the interactive API docs:
+
+### Swagger UI (OpenAPI)
+# http://localhost:8000/docs
+
+### ReDoc (Alternative documentation)
+# http://localhost:8000/redoc
+
+### 13. Test Ollama Directly (for comparison)
+### This tests Ollama directly without going through your FastAPI app
+
+POST http://localhost:11434/api/generate
+Content-Type: application/json
+
+{
+    "model": "tinyllama:1.1b",
+    "prompt": "Hello, this is a direct test to Ollama",
+    "stream": false
+}
+
+###
+
+### 14. Get Ollama Models Directly
+GET http://localhost:11434/api/tags
+
+###
+
+### 15. Get Ollama Running Models Directly
+GET http://localhost:11434/api/ps
+
+###
+
+### 3. Get Running Ollama Models
+GET http://localhost:8000/api/running-models
+Content-Type: application/json
+
+###
