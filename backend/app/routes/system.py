@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from app.services.system_service import system_service
+from app.config.settings import settings
 
 router = APIRouter(prefix="/api", tags=["system"])
 
@@ -15,5 +16,40 @@ async def get_system_info_endpoint():
             "memory_gb": 8.0,
             "platform": "unknown",
             "architecture": "unknown",
-            "error": str(e)
-        } 
+            "error": str(e),
+        }
+
+
+@router.get("/settings")
+async def get_settings():
+    return {
+        "OLLAMA_URL": settings.OLLAMA_URL,
+        "OLLAMA_MODEL": settings.OLLAMA_MODEL,
+        "timeout": settings.timeout,
+        "message_limit": settings.message_limit,
+        "message_offset": settings.message_offset,
+    }
+
+
+@router.post("/settings")
+async def update_settings(request: Request):
+    data = await request.json()
+    ollama_url = data.get("OLLAMA_URL")
+    ollama_model = data.get("OLLAMA_MODEL")
+    timeout = data.get("timeout")
+    message_limit = data.get("message_limit")
+    message_offset = data.get("message_offset")
+    settings.update_settings(
+        ollama_url=ollama_url,
+        ollama_model=ollama_model,
+        timeout=timeout,
+        message_limit=message_limit,
+        message_offset=message_offset,
+    )
+    return {
+        "OLLAMA_URL": settings.OLLAMA_URL,
+        "OLLAMA_MODEL": settings.OLLAMA_MODEL,
+        "timeout": settings.timeout,
+        "message_limit": settings.message_limit,
+        "message_offset": settings.message_offset,
+    }

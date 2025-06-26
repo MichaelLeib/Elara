@@ -9,10 +9,20 @@ export const useChatSessionMessages = () => {
   const [total, setTotal] = useState(0);
 
   const loadMessages = useCallback(
-    async (chatIndex: number, limit: number = 50, offset: number = 0) => {
+    async (
+      chatIndex: number,
+      settings: { message_limit: number; message_offset: number },
+      limit?: number,
+      offset?: number
+    ) => {
       setIsLoading(true);
       try {
-        const response = await getChatSessionMessages(chatIndex, limit, offset);
+        const response = await getChatSessionMessages(
+          chatIndex,
+          settings,
+          limit,
+          offset
+        );
         if (offset === 0) {
           // First load - replace all messages
           setMessages(response.messages);
@@ -32,9 +42,13 @@ export const useChatSessionMessages = () => {
   );
 
   const loadMore = useCallback(
-    async (chatIndex: number, limit: number = 50) => {
+    async (
+      chatIndex: number,
+      settings: { message_limit: number; message_offset: number },
+      limit?: number
+    ) => {
       if (!isLoading && hasMore) {
-        await loadMessages(chatIndex, limit, messages.length);
+        await loadMessages(chatIndex, settings, limit, messages.length);
       }
     },
     [isLoading, hasMore, messages.length, loadMessages]
@@ -45,9 +59,21 @@ export const useChatSessionMessages = () => {
   }, []);
 
   const updateMessage = useCallback(
-    (messageId: string, updates: Partial<Message>) => {
+    (
+      messageId: string,
+      updates:
+        | Partial<Message>
+        | ((prevMsg: Message | undefined) => Partial<Message>)
+    ) => {
       setMessages((prev) =>
-        prev.map((msg) => (msg.id === messageId ? { ...msg, ...updates } : msg))
+        prev.map((msg) => {
+          if (msg.id === messageId) {
+            const updateObj =
+              typeof updates === "function" ? updates(msg) : updates;
+            return { ...msg, ...updateObj };
+          }
+          return msg;
+        })
       );
     },
     []

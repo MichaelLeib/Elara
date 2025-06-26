@@ -1,12 +1,13 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import "./App.css";
 import { Chat } from "./components/Chat/Chat";
 import { SidePane } from "./components/SidePane/SidePane";
 import { ErrorBoundary } from "./ErrorBoundary";
 import type { Message } from "./components/Chat/models";
 import { useChatSessionMessages } from "./hooks/useChatSessionMessages";
+import { useSettings } from "./context/useSettings";
 
 const appStyle = css`
   display: flex;
@@ -125,6 +126,8 @@ function App() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<number | null>(null);
 
+  const { settings } = useSettings();
+
   const {
     messages: currentMessages,
     addMessage,
@@ -136,17 +139,32 @@ function App() {
     clearMessages,
   } = useChatSessionMessages();
 
-  const handleSelectChat = async (chatIndex: number) => {
-    setSelectedChatIndex(chatIndex);
-    clearMessages(); // Clear previous messages
-    await loadMessages(chatIndex, 50, 0); // Load first 50 messages
-  };
+  const handleSelectChat = useCallback(
+    async (chatIndex: number) => {
+      if (!settings) {
+        console.warn("Settings not available yet, skipping chat selection");
+        return;
+      }
 
-  const handleLoadMore = async () => {
-    if (selectedChatIndex) {
-      await loadMore(selectedChatIndex, 50);
+      setSelectedChatIndex(chatIndex);
+      clearMessages(); // Clear previous messages
+      console.log("Settings in handleSelectChat:", settings); // Debug log
+      await loadMessages(
+        chatIndex,
+        settings,
+        settings.message_limit,
+        settings.message_offset
+      );
+    },
+    [settings, clearMessages, loadMessages]
+  );
+
+  const handleLoadMore = useCallback(async () => {
+    if (selectedChatIndex && settings) {
+      console.log("Settings in handleLoadMore:", settings); // Debug log
+      await loadMore(selectedChatIndex, settings, settings.message_limit);
     }
-  };
+  }, [selectedChatIndex, settings, loadMore]);
 
   const handleNewChat = async () => {
     try {
@@ -233,16 +251,15 @@ function App() {
 
             if (data.type === "chunk") {
               // Update with new chunk
-              updateMessage(assistantMessageId, {
-                message:
-                  currentMessages.find((msg) => msg.id === assistantMessageId)
-                    ?.message + data.content || data.content,
-              });
+              updateMessage(assistantMessageId, (prevMsg) => ({
+                message: (prevMsg?.message || "") + data.content,
+              }));
             } else if (data.type === "done") {
-              // Mark as complete
-              updateMessage(assistantMessageId, {
+              // Mark as complete and preserve message content
+              updateMessage(assistantMessageId, (prevMsg) => ({
+                message: prevMsg?.message || "",
                 updated_at: new Date().toISOString(),
-              });
+              }));
               ws.close();
               resolve();
             } else if (data.type === "error") {
@@ -326,10 +343,10 @@ function App() {
 
   // Load initial chat on mount
   useEffect(() => {
-    if (selectedChatIndex) {
+    if (selectedChatIndex && settings) {
       handleSelectChat(selectedChatIndex);
     }
-  }, [selectedChatIndex]);
+  }, [selectedChatIndex, settings, handleSelectChat]);
 
   return (
     <ErrorBoundary>

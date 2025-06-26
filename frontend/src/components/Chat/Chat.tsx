@@ -3,7 +3,7 @@ import { css } from "@emotion/react";
 import { MessageInput } from "./MessageInput";
 import type { MessageInputHandle } from "./MessageInput";
 import type { Message } from "./models";
-import { MessageList } from "./MessageList";
+import { MessageList } from "./MessageList.tsx";
 import { ErrorBoundary } from "../../ErrorBoundary";
 import { useRef } from "react";
 

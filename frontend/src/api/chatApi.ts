@@ -144,13 +144,18 @@ export async function getModels(): Promise<{ models: Model[] }> {
 }
 
 export async function getChatHistory(
-  limit: number = 50,
-  offset: number = 0
+  limit?: number,
+  offset?: number
 ): Promise<{
   messages: Message[];
   total: number;
   has_more: boolean;
 }> {
+  if (limit === undefined || offset === undefined) {
+    const settings = await getSettings();
+    if (limit === undefined) limit = settings.message_limit;
+    if (offset === undefined) offset = settings.message_offset;
+  }
   const res = await fetch(
     `${config.API_URL}/chat-history?limit=${limit}&offset=${offset}`
   );
@@ -441,19 +446,66 @@ export async function getDownloadStatus(
 
 export async function getChatSessionMessages(
   chatIndex: number,
-  limit: number = 50,
-  offset: number = 0
+  settings: {
+    message_limit: number;
+    message_offset: number;
+  },
+  limit?: number,
+  offset?: number
 ): Promise<{
   messages: Message[];
   total: number;
   has_more: boolean;
 }> {
+  const finalLimit = limit ?? settings.message_limit;
+  const finalOffset = offset ?? settings.message_offset;
+
+  console.log(
+    `getChatSessionMessages called with limit=${limit}, offset=${offset}, using finalLimit=${finalLimit}, finalOffset=${finalOffset}`
+  ); // Debug log
+
   const res = await fetch(
-    `${config.API_URL}/chat-sessions/${chatIndex}/messages?limit=${limit}&offset=${offset}`
+    `${config.API_URL}/chat-sessions/${chatIndex}/messages?limit=${finalLimit}&offset=${finalOffset}`
   );
   if (!res.ok) {
     throw new Error(`HTTP error! status: ${res.status}`);
   }
   const data = await res.json();
   return data;
+}
+
+export async function getSettings(): Promise<{
+  OLLAMA_URL: string;
+  OLLAMA_MODEL: string;
+  timeout: number;
+  message_limit: number;
+  message_offset: number;
+}> {
+  const res = await fetch(config.API_URL + "/settings");
+  if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  return res.json();
+}
+
+export async function updateSettings(
+  settings: Partial<{
+    OLLAMA_URL: string;
+    OLLAMA_MODEL: string;
+    timeout: number;
+    message_limit: number;
+    message_offset: number;
+  }>
+): Promise<{
+  OLLAMA_URL: string;
+  OLLAMA_MODEL: string;
+  timeout: number;
+  message_limit: number;
+  message_offset: number;
+}> {
+  const res = await fetch(config.API_URL + "/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+  if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  return res.json();
 }

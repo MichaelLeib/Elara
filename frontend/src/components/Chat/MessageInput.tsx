@@ -8,9 +8,10 @@ import React, {
   useImperativeHandle,
 } from "react";
 import type { ChangeEvent } from "react";
-import { getModels } from "../../api/chatApi";
-import type { MessageInputProps, Model } from "./models";
+import { useModels } from "../../context/ModelsContext.tsx";
 import { ErrorBoundary } from "../../ErrorBoundary";
+import type { MessageInputProps } from "./models";
+import type { Model } from "../../context/ModelsContext.tsx";
 
 const messageInputContainerStyle = css`
   width: 100%;
@@ -392,40 +393,20 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     ref
   ) {
     const [message, setMessage] = useState("");
-    const [models, setModels] = useState<Model[]>([]);
     const [selectedModel, setSelectedModel] = useState<Model | null>(null);
     const [attachments, setAttachments] = useState<File[]>([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [isLoadingModels, setIsLoadingModels] = useState(true);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // Fetch models on component mount
+    const { models, loading: isLoadingModels } = useModels();
+
+    // Set default model when models are loaded
     useEffect(() => {
-      const fetchModels = async () => {
-        try {
-          setIsLoadingModels(true);
-          const models = await getModels();
-
-          setModels(models.models);
-          setSelectedModel(models.models[0]);
-        } catch (error) {
-          console.error("Failed to fetch models:", error);
-          // Fallback to default models if API fails
-          const fallbackModels: Model[] = [
-            { name: "GPT-4" },
-            { name: "GPT-3.5 Turbo" },
-            { name: "Claude-3" },
-          ];
-          setModels(fallbackModels);
-          setSelectedModel(fallbackModels[0]);
-        } finally {
-          setIsLoadingModels(false);
-        }
-      };
-
-      fetchModels();
-    }, []);
+      if (models && models.length > 0) {
+        setSelectedModel(models[0]);
+      }
+    }, [models]);
 
     useEffect(() => {
       if (textareaRef.current) {

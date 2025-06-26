@@ -14,6 +14,7 @@ import {
   type AvailableModel,
   type SystemInfo,
 } from "../../api/chatApi";
+import { useSettings } from "../../context/useSettings";
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -351,6 +352,13 @@ const downloadProgressStyle = css`
 `;
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
+  const {
+    settings,
+    loading: settingsLoading,
+    error: settingsError,
+    saveSettings,
+    reloadSettings,
+  } = useSettings();
   const [memoryEntries, setMemoryEntries] = useState<MemoryEntry[]>([]);
   const [installedModels, setInstalledModels] = useState<AvailableModel[]>([]);
   const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
@@ -360,12 +368,29 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     new Set()
   );
   const [removingModels, setRemovingModels] = useState<Set<string>>(new Set());
+  const [timeout, setTimeoutValue] = useState<number>(settings?.timeout ?? 30);
+  const [messageLimit, setMessageLimit] = useState<number>(
+    settings?.message_limit ?? 50
+  );
+  const [messageOffset, setMessageOffset] = useState<number>(
+    settings?.message_offset ?? 0
+  );
+  const [settingsSaved, setSettingsSaved] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       loadData();
+      reloadSettings();
     }
-  }, [isOpen]);
+  }, [isOpen, reloadSettings]);
+
+  useEffect(() => {
+    if (settings) {
+      setTimeoutValue(settings.timeout);
+      setMessageLimit(settings.message_limit);
+      setMessageOffset(settings.message_offset);
+    }
+  }, [settings]);
 
   const loadData = async () => {
     setLoading(true);
@@ -379,10 +404,24 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       setInstalledModels(modelsData.installed_models);
       setAvailableModels(modelsData.available_models);
       setSystemInfo(modelsData.system_info);
-    } catch (error) {
-      console.error("Error loading settings data:", error);
+    } catch {
+      // Error handled elsewhere
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveSettingsHandler = async () => {
+    try {
+      await saveSettings({
+        timeout,
+        message_limit: messageLimit,
+        message_offset: messageOffset,
+      });
+      setSettingsSaved(true);
+      await reloadSettings();
+    } finally {
+      setTimeout(() => setSettingsSaved(false), 2000);
     }
   };
 
@@ -413,8 +452,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         (entry) => entry.key.trim() && entry.value.trim()
       );
       setMemoryEntries(filteredEntries);
-    } catch (error) {
-      console.error("Error saving memory:", error);
+    } catch {
+      // Error handled elsewhere
     }
   };
 
@@ -427,8 +466,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       const modelsData = await getAvailableModels();
       setInstalledModels(modelsData.installed_models);
       setAvailableModels(modelsData.available_models);
-    } catch (error) {
-      console.error("Error downloading model:", error);
+    } catch {
+      // Error handled elsewhere
     } finally {
       setDownloadingModels((prev) => {
         const newSet = new Set(prev);
@@ -455,8 +494,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       const modelsData = await getAvailableModels();
       setInstalledModels(modelsData.installed_models);
       setAvailableModels(modelsData.available_models);
-    } catch (error) {
-      console.error("Error removing model:", error);
+    } catch {
+      // Error handled elsewhere
     } finally {
       setRemovingModels((prev) => {
         const newSet = new Set(prev);
@@ -798,6 +837,125 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               )}
             </div>
           </Accordion>
+
+          {/* Timeout & Message Settings */}
+          <div
+            style={{
+              margin: "32px 24px 12px 24px",
+              borderTop: "1px solid #e5e7eb",
+              paddingTop: 24,
+            }}
+          >
+            <label
+              style={{
+                fontWeight: 500,
+                fontSize: 15,
+                color: "#1f2937",
+                display: "block",
+                marginBottom: 8,
+              }}
+            >
+              Model Timeout (seconds)
+            </label>
+            <input
+              type="number"
+              min={5}
+              max={600}
+              value={timeout}
+              onChange={(e) => setTimeoutValue(Number(e.target.value))}
+              disabled={settingsLoading}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                fontSize: 15,
+                width: 120,
+                marginRight: 16,
+              }}
+            />
+            <label
+              style={{
+                fontWeight: 500,
+                fontSize: 15,
+                color: "#1f2937",
+                display: "inline-block",
+                marginBottom: 8,
+                marginLeft: 16,
+              }}
+            >
+              Message Limit
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={messageLimit}
+              onChange={(e) => setMessageLimit(Number(e.target.value))}
+              disabled={settingsLoading}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                fontSize: 15,
+                width: 100,
+                marginRight: 16,
+                marginLeft: 8,
+              }}
+            />
+            <label
+              style={{
+                fontWeight: 500,
+                fontSize: 15,
+                color: "#1f2937",
+                display: "inline-block",
+                marginBottom: 8,
+                marginLeft: 16,
+              }}
+            >
+              Message Offset
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={messageOffset}
+              onChange={(e) => setMessageOffset(Number(e.target.value))}
+              disabled={settingsLoading}
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                fontSize: 15,
+                width: 100,
+                marginLeft: 8,
+              }}
+            />
+            <button
+              onClick={saveSettingsHandler}
+              disabled={settingsLoading}
+              style={{
+                marginLeft: 16,
+                padding: "8px 18px",
+                borderRadius: 6,
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                fontWeight: 500,
+                fontSize: 15,
+                cursor: "pointer",
+              }}
+            >
+              {settingsLoading ? "Saving..." : "Save"}
+            </button>
+            {settingsSaved && (
+              <span style={{ color: "#10b981", marginLeft: 12 }}>Saved!</span>
+            )}
+            {settingsError && (
+              <span style={{ color: "#ef4444", marginLeft: 12 }}>
+                {settingsError}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 

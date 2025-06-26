@@ -1,8 +1,13 @@
 {
   "model": {
     "OLLAMA_URL": "http://localhost:11434/api/generate",
-    "OLLAMA_MODEL": "phi3:mini",
+    "OLLAMA_MODEL": "tinyllama:1.1b",
     "MEMORY_FILE": "storage/memory.json",
     "CHAT_FILE": "storage/chat-history/chat.json"
+  },
+  "timeout": 30,
+  "chat": {
+    "MESSAGE_LIMIT": 5,
+    "MESSAGE_OFFSET": 5
   }
 }
