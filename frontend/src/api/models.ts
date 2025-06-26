@@ -4,6 +4,7 @@ import type { Message } from "../components/Chat/models";
 export interface MemoryEntry {
   key: string;
   value: string;
+  importance: string;
 }
 
 export interface AvailableModel {

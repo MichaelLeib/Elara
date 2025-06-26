@@ -1,67 +1,73 @@
-import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.models.schemas import MemoryEntry
+from app.services.database_service import database_service
 
 
 class MemoryService:
-    """Service for managing memory entries"""
-    
-    def __init__(self):
-        self.memory_file = "storage/memory.json"
-    
+    """Service for managing memory entries using the database"""
+
     def load_memory(self) -> List[Dict[str, str]]:
-        """Load memory entries from JSON file"""
-        try:
-            with open(self.memory_file, "r") as f:
-                data = json.load(f)
-                return data.get("entries", [])
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
-    
+        """Load memory entries from database"""
+        entries = database_service.get_memory_entries()
+        # Convert to the expected format for backward compatibility
+        return [{"key": entry["key"], "value": entry["value"]} for entry in entries]
+
     def save_memory(self, entries: List[MemoryEntry]) -> bool:
-        """Save memory entries to JSON file"""
+        """Save memory entries to database"""
         try:
-            # Convert Pydantic models to dicts
-            entries_data = [entry.dict() for entry in entries]
-            with open(self.memory_file, "w") as f:
-                json.dump({"entries": entries_data}, f, indent=2)
+            # Clear existing entries and add new ones
+            existing_entries = database_service.get_memory_entries()
+            for entry in existing_entries:
+                database_service.delete_memory_entry(entry["key"])
+
+            # Add new entries
+            for entry in entries:
+                database_service.add_memory_entry(
+                    key=entry.key,
+                    value=entry.value,
+                    importance=5,  # Default importance
+                    category="user_defined",
+                )
             return True
         except Exception as e:
             print(f"Error saving memory: {e}")
             return False
-    
-    def add_memory_entry(self, key: str, value: str) -> bool:
-        """Add a single memory entry"""
-        entries = self.load_memory()
-        # Check if key already exists
-        for entry in entries:
-            if entry["key"] == key:
-                entry["value"] = value
-                return self.save_memory([MemoryEntry(**entry) for entry in entries])
-        
-        # Add new entry
-        new_entry = MemoryEntry(key=key, value=value)
-        entries.append(new_entry.dict())
-        return self.save_memory([MemoryEntry(**entry) for entry in entries])
-    
+
+    def add_memory_entry(
+        self, key: str, value: str, importance: int = 5, category: Optional[str] = None
+    ) -> bool:
+        """Add a single memory entry to database"""
+        try:
+            database_service.add_memory_entry(
+                key=key,
+                value=value,
+                importance=importance,
+                category=category or "user_defined",
+            )
+            return True
+        except Exception as e:
+            print(f"Error adding memory entry: {e}")
+            return False
+
     def get_memory_entry(self, key: str) -> str:
-        """Get a memory entry by key"""
-        entries = self.load_memory()
-        for entry in entries:
-            if entry["key"] == key:
-                return entry["value"]
-        return ""
-    
+        """Get a memory entry by key from database"""
+        entry = database_service.get_memory_entry(key)
+        return entry["value"] if entry else ""
+
     def delete_memory_entry(self, key: str) -> bool:
-        """Delete a memory entry by key"""
-        entries = self.load_memory()
-        original_length = len(entries)
-        entries = [entry for entry in entries if entry["key"] != key]
-        
-        if len(entries) < original_length:
-            return self.save_memory([MemoryEntry(**entry) for entry in entries])
-        return False
+        """Delete a memory entry by key from database"""
+        return database_service.delete_memory_entry(key)
+
+    def get_memory_entries(
+        self, category: Optional[str] = None, limit: int = 100
+    ) -> List[Dict]:
+        """Get memory entries from database, optionally filtered by category"""
+        return database_service.get_memory_entries(category=category, limit=limit)
+
+    def get_important_memory(self, limit: int = 20) -> List[Dict]:
+        """Get important memory entries for context"""
+        return database_service.get_important_memory(limit=limit)
 
 
 # Global service instance
-memory_service = MemoryService() 
+memory_service = MemoryService()

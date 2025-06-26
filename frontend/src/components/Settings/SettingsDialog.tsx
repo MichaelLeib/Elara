@@ -126,6 +126,11 @@ const memoryItemStyle = css`
   &:last-child {
     border-bottom: none;
   }
+
+  @media (prefers-color-scheme: dark) {
+    background: #1e293b;
+    border-bottom: 1px solid #334155;
+  }
 `;
 
 const inputStyle = css`
@@ -485,12 +490,15 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   };
 
   const addMemoryEntry = () => {
-    setMemoryEntries([...memoryEntries, { key: "", value: "" }]);
+    setMemoryEntries([
+      ...memoryEntries,
+      { key: "", value: "", importance: "3" },
+    ]);
   };
 
   const updateMemoryEntry = (
     index: number,
-    field: "key" | "value",
+    field: "key" | "value" | "importance",
     value: string
   ) => {
     const newEntries = [...memoryEntries];
@@ -620,7 +628,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                 >
                   <input
                     css={inputStyle}
-                    placeholder="Key (e.g., 'My name')"
+                    placeholder="Subject (e.g., 'My name')"
                     value={entry.key}
                     onChange={(e) =>
                       updateMemoryEntry(index, "key", e.target.value)
@@ -632,6 +640,14 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     value={entry.value}
                     onChange={(e) =>
                       updateMemoryEntry(index, "value", e.target.value)
+                    }
+                  />
+                  <input
+                    css={inputStyle}
+                    placeholder="Importance (1 = Highest, 5 = Lowest)"
+                    value={entry.importance ?? "3"}
+                    onChange={(e) =>
+                      updateMemoryEntry(index, "importance", e.target.value)
                     }
                   />
                   <button
