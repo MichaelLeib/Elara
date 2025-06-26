@@ -14,7 +14,9 @@ CONVERSATION CONTEXT:
 User Message: {user_message}
 Assistant Response: {assistant_message}
 
-Please provide a structured summary in the following JSON format:
+IMPORTANT: You must respond with ONLY valid JSON. No other text, no explanations, no markdown formatting.
+
+Return this exact JSON structure:
 {{
     "key_insights": [
         "List 2-3 most important insights or discoveries from this exchange"
@@ -39,8 +41,11 @@ Guidelines:
 - Note any decisions made or conclusions reached
 - Highlight information that would be valuable for future conversations
 - If the exchange is trivial or doesn't contain significant insights, mark confidence as "low"
+- Use "high" confidence only for exchanges with clear, actionable insights
+- Use "medium" confidence for exchanges with some useful information
+- Use "low" confidence for casual greetings, simple questions, or trivial exchanges
 
-Respond only with valid JSON."""
+CRITICAL: Respond with ONLY the JSON object. No other text."""
 
     async def summarize_conversation_exchange(
         self, user_message: str, assistant_message: str, model: Optional[str] = None
@@ -181,7 +186,9 @@ CHAT SESSION ({len(messages)} messages):
 
         session_prompt += """
 
-Please provide a structured summary in the following JSON format:
+IMPORTANT: You must respond with ONLY valid JSON. No other text, no explanations, no markdown formatting.
+
+Return this exact JSON structure:
 {
     "key_insights": [
         "List 3-5 most important insights from the entire session"
@@ -209,8 +216,12 @@ Guidelines:
 - Note any unresolved questions or incomplete tasks
 - Highlight information valuable for future conversations
 - Assess the overall quality and completeness of the session
+- Use "excellent" quality for sessions with clear outcomes and valuable insights
+- Use "good" quality for sessions with useful information but room for improvement
+- Use "fair" quality for sessions with some value but limited depth
+- Use "poor" quality for sessions with minimal value or unclear outcomes
 
-Respond only with valid JSON."""
+CRITICAL: Respond with ONLY the JSON object. No other text."""
 
         try:
             response = await ollama_service.query_ollama(

@@ -47,43 +47,76 @@ class DatabaseService:
 
     # Chat Session Operations
     def create_chat_session(
-        self, title: str, model: str, metadata: Optional[Dict] = None
+        self,
+        title: str,
+        model: str,
+        is_private: bool = True,
+        metadata: Optional[Dict] = None,
     ) -> str:
         """Create a new chat session"""
         session_id = str(uuid.uuid4())
         with self._get_connection() as conn:
             conn.execute(
-                "INSERT INTO chat_sessions (id, title, model, metadata) VALUES (?, ?, ?, ?)",
-                (session_id, title, model, json.dumps(metadata) if metadata else None),
+                "INSERT INTO chat_sessions (id, title, model, is_private, metadata) VALUES (?, ?, ?, ?, ?)",
+                (
+                    session_id,
+                    title,
+                    model,
+                    is_private,
+                    json.dumps(metadata) if metadata else None,
+                ),
             )
             conn.commit()
         return session_id
 
     def get_chat_session(self, session_id: str) -> Optional[Dict]:
-        """Get chat session by ID"""
+        """Get chat session by ID with message count"""
         with self._get_connection() as conn:
             cursor = conn.execute(
-                "SELECT * FROM chat_sessions WHERE id = ?", (session_id,)
+                """
+                SELECT 
+                    cs.*,
+                    COALESCE(COUNT(mm.id), 0) as message_count
+                FROM chat_sessions cs
+                LEFT JOIN messages_meta mm ON cs.id = mm.chat_id
+                WHERE cs.id = ?
+                GROUP BY cs.id
+                """,
+                (session_id,),
             )
             row = cursor.fetchone()
             if row:
                 data = dict(row)
                 if data.get("metadata"):
                     data["metadata"] = json.loads(data["metadata"])
+                # Ensure message_count is an integer
+                data["message_count"] = int(data.get("message_count", 0))
                 return data
         return None
 
     def get_chat_sessions(self, limit: int = 50) -> List[Dict]:
-        """Get recent chat sessions"""
+        """Get recent chat sessions with message count"""
         with self._get_connection() as conn:
             cursor = conn.execute(
-                "SELECT * FROM chat_sessions ORDER BY updated_at DESC LIMIT ?", (limit,)
+                """
+                SELECT 
+                    cs.*,
+                    COALESCE(COUNT(mm.id), 0) as message_count
+                FROM chat_sessions cs
+                LEFT JOIN messages_meta mm ON cs.id = mm.chat_id
+                GROUP BY cs.id
+                ORDER BY cs.updated_at DESC 
+                LIMIT ?
+                """,
+                (limit,),
             )
             sessions = []
             for row in cursor.fetchall():
                 data = dict(row)
                 if data.get("metadata"):
                     data["metadata"] = json.loads(data["metadata"])
+                # Ensure message_count is an integer
+                data["message_count"] = int(data.get("message_count", 0))
                 sessions.append(data)
             return sessions
 
@@ -198,6 +231,118 @@ class DatabaseService:
         with self._get_connection() as conn:
             cursor = conn.execute("SELECT * FROM recent_chat_context LIMIT ?", (limit,))
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_public_chat_context(self, session_id: str, limit: int = 10) -> Dict:
+        """Get context for public chats including summaries and memories"""
+        context = {
+            "session_summaries": [],
+            "conversation_summaries": [],
+            "memories": [],
+            "recent_messages": [],
+        }
+
+        with self._get_connection() as conn:
+            # Get session summary
+            cursor = conn.execute(
+                "SELECT summary_data FROM session_summaries WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1",
+                (session_id,),
+            )
+            session_summary = cursor.fetchone()
+            if session_summary:
+                context["session_summaries"].append(
+                    json.loads(session_summary["summary_data"])
+                )
+
+            # Get recent conversation summaries
+            cursor = conn.execute(
+                """
+                SELECT summary_data FROM conversation_summaries 
+                WHERE chat_id = ? AND confidence_level IN ('high', 'medium')
+                ORDER BY created_at DESC LIMIT ?
+                """,
+                (session_id, limit),
+            )
+            for row in cursor.fetchall():
+                context["conversation_summaries"].append(
+                    json.loads(row["summary_data"])
+                )
+
+            # Get important memories
+            cursor = conn.execute("SELECT * FROM important_memory LIMIT ?", (limit,))
+            for row in cursor.fetchall():
+                context["memories"].append(dict(row))
+
+            # Get recent messages from this session
+            cursor = conn.execute(
+                """
+                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at
+                FROM messages m
+                JOIN messages_meta mm ON m.id = mm.id
+                WHERE mm.chat_id = ? 
+                ORDER BY mm.created_at DESC 
+                LIMIT ?
+                """,
+                (session_id, limit),
+            )
+            for row in cursor.fetchall():
+                context["recent_messages"].append(dict(row))
+
+        return context
+
+    def get_private_chat_context(self, session_id: str, limit: int = 10) -> Dict:
+        """Get context for private chats using only this session's data (isolated)"""
+        context = {
+            "session_summaries": [],
+            "conversation_summaries": [],
+            "memories": [],  # Empty for private chats - no global memories
+            "recent_messages": [],
+        }
+
+        with self._get_connection() as conn:
+            # Get session summary (from this session only)
+            cursor = conn.execute(
+                "SELECT summary_data FROM session_summaries WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1",
+                (session_id,),
+            )
+            session_summary = cursor.fetchone()
+            if session_summary:
+                context["session_summaries"].append(
+                    json.loads(session_summary["summary_data"])
+                )
+
+            # Get recent conversation summaries (from this session only)
+            cursor = conn.execute(
+                """
+                SELECT summary_data FROM conversation_summaries 
+                WHERE chat_id = ? AND confidence_level IN ('high', 'medium')
+                ORDER BY created_at DESC LIMIT ?
+                """,
+                (session_id, limit),
+            )
+            for row in cursor.fetchall():
+                context["conversation_summaries"].append(
+                    json.loads(row["summary_data"])
+                )
+
+            # Private chats don't get global memories - they're isolated
+            # context["memories"] remains empty
+
+            # Get recent messages from this session only
+            cursor = conn.execute(
+                """
+                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at
+                FROM messages m
+                JOIN messages_meta mm ON m.id = mm.id
+                WHERE mm.chat_id = ? 
+                ORDER BY mm.created_at DESC 
+                LIMIT ?
+                """,
+                (session_id, limit),
+            )
+            for row in cursor.fetchall():
+                context["recent_messages"].append(dict(row))
+
+        return context
 
     # Memory Operations
     def add_memory_entry(

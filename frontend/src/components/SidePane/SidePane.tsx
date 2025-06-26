@@ -9,6 +9,7 @@ interface SidePaneProps {
   onSelectChat: (sessionId: string) => void;
   selectedChatIndex: string | null;
   onNewChat: () => void;
+  onNewPrivateChat: () => void;
   onDeleteChat: (sessionId: string) => void;
   chatSessions: Array<{
     id: string;
@@ -191,6 +192,7 @@ export function SidePane({
   onSelectChat,
   selectedChatIndex,
   onNewChat,
+  onNewPrivateChat,
   onDeleteChat,
   chatSessions,
 }: SidePaneProps) {
@@ -252,6 +254,7 @@ export function SidePane({
 
             <ChatHistory
               onNewChat={onNewChat}
+              onNewPrivateChat={onNewPrivateChat}
               onSelectChat={onSelectChat}
               selectedChatIndex={selectedChatIndex}
               onDeleteChat={onDeleteChat}

@@ -2,10 +2,18 @@
 import { css } from "@emotion/react";
 import { useState } from "react";
 import { updateChatSessionTitle } from "../../api/chatApi";
-import { FaPlus, FaPenToSquare, FaTrash, FaComments } from "react-icons/fa6";
+import {
+  FaPlus,
+  FaPenToSquare,
+  FaTrash,
+  FaComments,
+  FaLock,
+} from "react-icons/fa6";
+import dayjs from "dayjs";
 
 interface ChatHistoryProps {
   onNewChat: () => void;
+  onNewPrivateChat: () => void;
   onSelectChat: (sessionId: string) => void;
   selectedChatIndex: string | null;
   onDeleteChat: (sessionId: string) => void;
@@ -76,6 +84,33 @@ const newChatButtonStyle = css`
   &:hover {
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
   }
+`;
+
+const privateChatButtonStyle = css`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+  box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
+  padding: 0;
+  margin-left: 0.5rem;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4);
+  }
+`;
+
+const buttonContainerStyle = css`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 `;
 
 const chatListStyle = css`
@@ -244,6 +279,7 @@ const editInputStyle = css`
 
 export function ChatHistory({
   onNewChat,
+  onNewPrivateChat,
   onSelectChat,
   selectedChatIndex,
   onDeleteChat,
@@ -290,34 +326,26 @@ export function ChatHistory({
     setEditingTitle("");
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
-    if (diffInHours < 24) {
-      return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } else if (diffInHours < 168) {
-      return date.toLocaleDateString([], { weekday: "short" });
-    } else {
-      return date.toLocaleDateString([], { month: "short", day: "numeric" });
-    }
-  };
-
   return (
     <div css={chatHistoryContainerStyle}>
       <div css={chatHistoryHeaderStyle}>
         <h2 css={titleStyle}>Chats</h2>
-        <button
-          css={newChatButtonStyle}
-          onClick={onNewChat}
-          title="New Chat"
-        >
-          <FaPlus size={14} />
-        </button>
+        <div css={buttonContainerStyle}>
+          <button
+            css={newChatButtonStyle}
+            onClick={onNewChat}
+            title="New Chat"
+          >
+            <FaPlus size={14} />
+          </button>
+          <button
+            css={privateChatButtonStyle}
+            onClick={onNewPrivateChat}
+            title="New Private Chat"
+          >
+            <FaLock size={14} />
+          </button>
+        </div>
       </div>
 
       <div css={chatListStyle}>
@@ -359,7 +387,7 @@ export function ChatHistory({
                   {chat.message_count} messages
                 </div>
                 <div css={chatUpdatedAtStyle}>
-                  {formatDate(chat.updated_at)}
+                  {dayjs(chat.updated_at).format("MMM D, YYYY HH:mm")}
                 </div>
               </div>
 

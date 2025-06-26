@@ -11,6 +11,7 @@ import { useSettings } from "./context/useSettings";
 import {
   getChatSessions,
   createChatSession,
+  createPrivateChatSession,
   deleteChatSession,
 } from "./api/chatApi";
 import { sendMessageWebSocket } from "./api/chatApi";
@@ -137,6 +138,7 @@ function App() {
       created_at: string;
       updated_at: string;
       message_count: number;
+      is_private?: boolean;
     }>
   >([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -212,6 +214,18 @@ function App() {
     }
   };
 
+  const handleNewPrivateChat = async () => {
+    try {
+      const response = await createPrivateChatSession("Private Chat");
+      const newSession = response.session;
+      setChatSessions((prev) => [newSession, ...prev]);
+      setSelectedSessionId(newSession.id);
+      clearMessages();
+    } catch (error) {
+      console.error("Error creating new private chat:", error);
+    }
+  };
+
   const handleSendMessage = async (
     message: string,
     model: string,
@@ -225,6 +239,7 @@ function App() {
 
     // Create a session if none exists
     let currentSessionId = selectedSessionId;
+    let isPrivate = false; // Default to public chat
     if (!currentSessionId) {
       try {
         // Create a meaningful title from the first message
@@ -241,6 +256,12 @@ function App() {
         setIsLoading(false);
         return;
       }
+    } else {
+      // Check if current session is private
+      const currentSession = chatSessions.find(
+        (session) => session.id === currentSessionId
+      );
+      isPrivate = currentSession?.is_private || false;
     }
 
     // Add user message
@@ -273,6 +294,7 @@ function App() {
         message,
         model,
         currentSessionId,
+        isPrivate,
         (chunk: string, done: boolean, error?: string) => {
           if (error) {
             // Update the assistant message with error
@@ -351,6 +373,7 @@ function App() {
           onSelectChat={handleSelectChat}
           selectedChatIndex={selectedSessionId}
           onNewChat={handleNewChat}
+          onNewPrivateChat={handleNewPrivateChat}
           onDeleteChat={handleDeleteChat}
           chatSessions={chatSessions}
         />

@@ -20,9 +20,15 @@ export async function sendMessageWebSocket(
   message: string,
   model?: string,
   session_id?: string,
+  isPrivate: boolean = false,
   onChunk?: (chunk: string, done: boolean, error?: string) => void
 ): Promise<void> {
-  console.log("Sending message to WebSocket:", { message, model, session_id });
+  console.log("Sending message to WebSocket:", {
+    message,
+    model,
+    session_id,
+    isPrivate,
+  });
   // Convert HTTP URL to WebSocket URL
   const wsUrl =
     config.API_URL.replace("http://", "ws://").replace("https://", "wss://") +
@@ -31,8 +37,15 @@ export async function sendMessageWebSocket(
 
   return new Promise((resolve, reject) => {
     ws.onopen = () => {
-      const payload: { message: string; model?: string; session_id?: string } =
-        { message, model };
+      const payload: {
+        message: string;
+        model?: string;
+        session_id?: string;
+        isPrivate: boolean;
+      } = { message, isPrivate };
+      if (model) {
+        payload.model = model;
+      }
       if (session_id) {
         payload.session_id = session_id;
       }
@@ -278,17 +291,24 @@ export async function getChatSessions(): Promise<ChatSessionsResponse> {
 }
 
 export async function createChatSession(
-  title: string
+  title: string,
+  isPrivate: boolean = false
 ): Promise<CreateChatSessionResponse> {
   const res = await fetch(`${config.API_URL}/chat-sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({ title, isPrivate }),
   });
   if (!res.ok) {
     throw new Error(`HTTP error! status: ${res.status}`);
   }
   return res.json();
+}
+
+export async function createPrivateChatSession(
+  title: string = "Private Chat"
+): Promise<CreateChatSessionResponse> {
+  return createChatSession(title, true);
 }
 
 export async function updateChatSessionTitle(

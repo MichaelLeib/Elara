@@ -17,6 +17,7 @@ from app.models.schemas import (
 )
 from app.services.ollama_service import ollama_service
 from app.services.summarization_service import summarization_service
+from app.services.context_service import context_service
 from app.config.settings import settings
 from app.services.database_service import database_service
 
@@ -35,14 +36,19 @@ async def websocket_endpoint(websocket: WebSocket):
                     message = parsed_data.get("message", data) or ""
                     model = parsed_data.get("model", settings.OLLAMA_MODEL)
                     session_id = parsed_data.get("session_id", None)
+                    is_private = parsed_data.get(
+                        "isPrivate", True
+                    )  # Default to private
                 else:
                     message = data or ""
                     model = settings.OLLAMA_MODEL
                     session_id = None
+                    is_private = True
             except json.JSONDecodeError:
                 message = data or ""
                 model = settings.OLLAMA_MODEL
                 session_id = None
+                is_private = True
 
             try:
                 # Create a session if none provided
@@ -56,7 +62,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             safe_title = message
 
                     session_id = database_service.create_chat_session(
-                        title=safe_title, model=model
+                        title=safe_title, model=model, is_private=is_private
                     )
 
                 # Save user message to session
@@ -67,10 +73,22 @@ async def websocket_endpoint(websocket: WebSocket):
                     model=model,
                 )
 
-                # Stream response from Ollama
+                # Build context based on privacy setting
+                if is_private:
+                    # Private chat: context from this session only (isolated)
+                    context = context_service.build_private_chat_context(
+                        session_id, message
+                    )
+                else:
+                    # Public chat: full context with summaries and memories
+                    context = context_service.build_public_chat_context(
+                        session_id, message
+                    )
+
+                # Stream response from Ollama with context
                 full_response = ""
                 async for chunk in ollama_service.query_ollama_stream(
-                    message, settings.timeout, model
+                    context, settings.timeout, model
                 ):
                     full_response += chunk
                     await websocket.send_text(
@@ -89,7 +107,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     model=model,
                 )
 
-                # Generate and store conversation summary
+                # Generate and store conversation summary (for both private and public chats)
                 try:
                     summary_data = (
                         await summarization_service.summarize_conversation_exchange(
@@ -161,7 +179,9 @@ async def create_chat_session(request: ChatSessionRequest):
     """Create a new chat session"""
     try:
         title = request.title or "New Chat"
-        session_id = database_service.create_chat_session(title, settings.OLLAMA_MODEL)
+        session_id = database_service.create_chat_session(
+            title=title, model=settings.OLLAMA_MODEL, is_private=request.isPrivate
+        )
         session = database_service.get_chat_session(session_id)
         return {
             "status": "success",
@@ -232,6 +252,13 @@ async def get_chat_session_messages(session_id: str, limit: int, offset: int):
 async def send_message_to_chat_session(session_id: str, request: ChatMessageRequest):
     """Send a message to a chat session and get AI response"""
     try:
+        # Get session info to check privacy setting
+        session = database_service.get_chat_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Chat session not found")
+
+        is_private = session.get("is_private", True)
+
         # Add user message
         user_message_id = database_service.add_message(
             chat_id=session_id,
@@ -239,10 +266,22 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
             message=request.message,
             model=request.model,
         )
-        # Get AI response
-        ai_response = await ollama_service.query_ollama(
-            request.message, 30.0, request.model
-        )
+
+        # Build context based on privacy setting
+        if is_private:
+            # Private chat: context from this session only (isolated)
+            context = context_service.build_private_chat_context(
+                session_id, request.message
+            )
+        else:
+            # Public chat: full context with summaries and memories
+            context = context_service.build_public_chat_context(
+                session_id, request.message
+            )
+
+        # Get AI response with context
+        ai_response = await ollama_service.query_ollama(context, 30.0, request.model)
+
         # Add AI response
         assistant_message_id = database_service.add_message(
             chat_id=session_id,
@@ -251,20 +290,26 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
             model=request.model,
         )
 
-        # Generate and store conversation summary
-        summary_data = await summarization_service.summarize_conversation_exchange(
-            user_message=request.message,
-            assistant_message=ai_response,
-            model=request.model,
-        )
+        # Generate and store conversation summary (for both private and public chats)
+        summary_data = None
+        summary_id = None
+        try:
+            summary_data = await summarization_service.summarize_conversation_exchange(
+                user_message=request.message,
+                assistant_message=ai_response,
+                model=request.model,
+            )
 
-        summary_id = database_service.add_conversation_summary(
-            chat_id=session_id,
-            user_message_id=user_message_id,
-            assistant_message_id=assistant_message_id,
-            summary_data=summary_data,
-            confidence_level=summary_data.get("confidence_level", "low"),
-        )
+            summary_id = database_service.add_conversation_summary(
+                chat_id=session_id,
+                user_message_id=user_message_id,
+                assistant_message_id=assistant_message_id,
+                summary_data=summary_data,
+                confidence_level=summary_data.get("confidence_level", "low"),
+            )
+
+        except Exception as summary_error:
+            print(f"Summary generation failed: {summary_error}")
 
         return {
             "status": "success",
@@ -273,6 +318,7 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
             "ai_response": ai_response,
             "summary": summary_data,
             "summary_id": summary_id,
+            "is_private": is_private,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")

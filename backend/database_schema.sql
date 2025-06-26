@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     id TEXT PRIMARY KEY,  -- UUID
     title TEXT NOT NULL,
     model TEXT NOT NULL,
+    is_private BOOLEAN DEFAULT TRUE,  -- Privacy flag for summarization and context
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     metadata TEXT  -- JSON for additional session data

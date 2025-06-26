@@ -17,6 +17,7 @@ class ChatResponse(BaseModel):
 class WebSocketMessage(BaseModel):
     message: str
     model: str
+    isPrivate: bool = True  # Default to private for backward compatibility
 
 
 class MemoryEntry(BaseModel):
@@ -34,6 +35,7 @@ class ModelDownloadRequest(BaseModel):
 
 class ChatSessionRequest(BaseModel):
     title: Optional[str] = None
+    isPrivate: bool = True  # Default to private for backward compatibility
 
 
 class ChatSessionUpdateRequest(BaseModel):
