@@ -19,9 +19,10 @@ import type {
 export async function sendMessageWebSocket(
   message: string,
   model?: string,
+  session_id?: string,
   onChunk?: (chunk: string, done: boolean, error?: string) => void
 ): Promise<void> {
-  console.log("Sending message to WebSocket:", { message, model });
+  console.log("Sending message to WebSocket:", { message, model, session_id });
   // Convert HTTP URL to WebSocket URL
   const wsUrl =
     config.API_URL.replace("http://", "ws://").replace("https://", "wss://") +
@@ -30,8 +31,13 @@ export async function sendMessageWebSocket(
 
   return new Promise((resolve, reject) => {
     ws.onopen = () => {
-      ws.send(JSON.stringify({ message, model }));
-      console.log("Message sent to WebSocket:", { message, model });
+      const payload: { message: string; model?: string; session_id?: string } =
+        { message, model };
+      if (session_id) {
+        payload.session_id = session_id;
+      }
+      ws.send(JSON.stringify(payload));
+      console.log("Message sent to WebSocket:", payload);
     };
 
     ws.onmessage = (event) => {

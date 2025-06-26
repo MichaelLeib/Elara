@@ -24,27 +24,40 @@ async def websocket_endpoint(websocket: WebSocket):
             try:
                 parsed_data = json.loads(data)
                 if isinstance(parsed_data, dict):
-                    message = parsed_data.get("message", data)
+                    message = parsed_data.get("message", data) or ""
                     model = parsed_data.get("model", settings.OLLAMA_MODEL)
                     session_id = parsed_data.get("session_id", None)
                 else:
-                    message = data
+                    message = data or ""
                     model = settings.OLLAMA_MODEL
                     session_id = None
             except json.JSONDecodeError:
-                message = data
+                message = data or ""
                 model = settings.OLLAMA_MODEL
                 session_id = None
 
             try:
-                # Save user message to session if session_id is provided
-                if session_id:
-                    database_service.add_message(
-                        chat_id=session_id,
-                        user_id="user",
-                        message=message,
-                        model=model,
+                # Create a session if none provided
+                if not session_id:
+                    # Create a safe title from the message or use a default
+                    safe_title: str = "New Chat"
+                    if message:
+                        if len(message) > 50:
+                            safe_title = message[:50] + "..."
+                        else:
+                            safe_title = message
+
+                    session_id = database_service.create_chat_session(
+                        title=safe_title, model=model
                     )
+
+                # Save user message to session
+                database_service.add_message(
+                    chat_id=session_id,
+                    user_id="user",
+                    message=message,
+                    model=model,
+                )
 
                 # Stream response from Ollama
                 full_response = ""
@@ -60,14 +73,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     json.dumps({"type": "done", "content": "", "done": True})
                 )
 
-                # Save assistant message to session if session_id is provided
-                if session_id:
-                    database_service.add_message(
-                        chat_id=session_id,
-                        user_id="assistant",
-                        message=full_response,
-                        model=model,
-                    )
+                # Save assistant message to session
+                database_service.add_message(
+                    chat_id=session_id,
+                    user_id="assistant",
+                    message=full_response,
+                    model=model,
+                )
             except Exception as e:
                 error_message = f"Error: {str(e)}"
                 await websocket.send_text(

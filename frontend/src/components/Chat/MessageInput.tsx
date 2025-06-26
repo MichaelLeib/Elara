@@ -8,10 +8,10 @@ import React, {
   useImperativeHandle,
 } from "react";
 import type { ChangeEvent } from "react";
-import { useModels } from "../../context/ModelsContext.tsx";
+import { useModels } from "../../context/useModels";
 import { ErrorBoundary } from "../../ErrorBoundary";
 import type { MessageInputProps } from "./models";
-import type { Model } from "../../context/ModelsContext.tsx";
+import type { Model } from "../../context/ModelsContext";
 import { FaPaperclip, FaChevronDown, FaArrowRight } from "react-icons/fa6";
 
 const messageInputContainerStyle = css`

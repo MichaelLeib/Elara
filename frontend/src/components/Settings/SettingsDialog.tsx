@@ -197,6 +197,12 @@ const modelHeaderStyle = css`
   margin-bottom: 12px;
 `;
 
+const modelHeaderBadgesStyle = css`
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+`;
+
 const modelNameStyle = css`
   font-size: 16px;
   font-weight: 600;
@@ -341,6 +347,12 @@ const systemInfoStyle = css`
   }
 `;
 
+const settingsDialogModelDescriptionStyle = css`
+  color: #6b7280;
+  margin-bottom: 16px;
+  font-size: 14px;
+`;
+
 const downloadProgressStyle = css`
   position: fixed;
   top: 20px;
@@ -352,6 +364,48 @@ const downloadProgressStyle = css`
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   z-index: 1001;
   min-width: 200px;
+`;
+
+const settingsDialogSettingsSectionStyle = css`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 32px 24px 12px 24px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 24px;
+
+  @media (prefers-color-scheme: dark) {
+    border-top: 1px solid #334155;
+  }
+`;
+
+const labelStyle = css`
+  font-weight: 500;
+  font-size: 15px;
+  color: #1f2937;
+  display: block;
+  margin-bottom: 8px;
+
+  @media (prefers-color-scheme: dark) {
+    color: #f1f5f9;
+  }
+`;
+
+const settingsDialogSaveButtonStyle = css`
+  margin-left: 16px;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 15px;
+  cursor: pointer;
+  background: #3b82f6;
+  color: white;
+
+  @media (prefers-color-scheme: dark) {
+    background: #3b82f6;
+    color: white;
+  }
 `;
 
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
@@ -733,25 +787,13 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             title="Recommended Models"
             defaultOpen={false}
           >
-            <p
-              style={{
-                color: "#6b7280",
-                marginBottom: "16px",
-                fontSize: "14px",
-              }}
-            >
+            <p css={settingsDialogModelDescriptionStyle}>
               Download and manage AI models for different use cases. These
               models are not yet installed.
             </p>
             <div css={modelsListStyle}>
               {recommendedModels.length === 0 ? (
-                <div
-                  style={{
-                    padding: "16px",
-                    textAlign: "center",
-                    color: "#9ca3af",
-                  }}
-                >
+                <div css={emptyStateStyle}>
                   All recommended models are already installed.
                 </div>
               ) : (
@@ -763,13 +805,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     <div css={modelHeaderStyle}>
                       <div>
                         <h4 css={modelNameStyle}>{model.name}</h4>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "8px",
-                            marginTop: "4px",
-                          }}
-                        >
+                        <div css={modelHeaderBadgesStyle}>
                           {model.recommended && (
                             <span css={recommendedBadgeStyle}>Recommended</span>
                           )}
@@ -820,13 +856,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
                       <div css={detailSectionStyle}>
                         <h4>Hardware Requirements</h4>
-                        <p
-                          style={{
-                            fontSize: "13px",
-                            color: "#6b7280",
-                            margin: 0,
-                          }}
-                        >
+                        <p css={modelDescriptionStyle}>
                           {model.recommended_for}
                         </p>
                       </div>
@@ -837,124 +867,59 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             </div>
           </Accordion>
 
-          {/* Timeout & Message Settings */}
-          <div
-            style={{
-              margin: "32px 24px 12px 24px",
-              borderTop: "1px solid #e5e7eb",
-              paddingTop: 24,
-            }}
+          {/* Advanced Settings */}
+          <Accordion
+            title="Advanced Settings"
+            defaultOpen={false}
           >
-            <label
-              style={{
-                fontWeight: 500,
-                fontSize: 15,
-                color: "#1f2937",
-                display: "block",
-                marginBottom: 8,
-              }}
-            >
-              Model Timeout (seconds)
-            </label>
-            <input
-              type="number"
-              min={5}
-              max={600}
-              value={timeout}
-              onChange={(e) => setTimeoutValue(Number(e.target.value))}
-              disabled={settingsLoading}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #d1d5db",
-                borderRadius: 6,
-                fontSize: 15,
-                width: 120,
-                marginRight: 16,
-              }}
-            />
-            <label
-              style={{
-                fontWeight: 500,
-                fontSize: 15,
-                color: "#1f2937",
-                display: "inline-block",
-                marginBottom: 8,
-                marginLeft: 16,
-              }}
-            >
-              Message Limit
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={200}
-              value={messageLimit}
-              onChange={(e) => setMessageLimit(Number(e.target.value))}
-              disabled={settingsLoading}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #d1d5db",
-                borderRadius: 6,
-                fontSize: 15,
-                width: 100,
-                marginRight: 16,
-                marginLeft: 8,
-              }}
-            />
-            <label
-              style={{
-                fontWeight: 500,
-                fontSize: 15,
-                color: "#1f2937",
-                display: "inline-block",
-                marginBottom: 8,
-                marginLeft: 16,
-              }}
-            >
-              Message Offset
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={1000}
-              value={messageOffset}
-              onChange={(e) => setMessageOffset(Number(e.target.value))}
-              disabled={settingsLoading}
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #d1d5db",
-                borderRadius: 6,
-                fontSize: 15,
-                width: 100,
-                marginLeft: 8,
-              }}
-            />
-            <button
-              onClick={saveSettingsHandler}
-              disabled={settingsLoading}
-              style={{
-                marginLeft: 16,
-                padding: "8px 18px",
-                borderRadius: 6,
-                background: "#3b82f6",
-                color: "white",
-                border: "none",
-                fontWeight: 500,
-                fontSize: 15,
-                cursor: "pointer",
-              }}
-            >
-              {settingsLoading ? "Saving..." : "Save"}
-            </button>
-            {settingsSaved && (
-              <span style={{ color: "#10b981", marginLeft: 12 }}>Saved!</span>
-            )}
-            {settingsError && (
-              <span style={{ color: "#ef4444", marginLeft: 12 }}>
-                {settingsError}
-              </span>
-            )}
-          </div>
+            <div css={settingsDialogSettingsSectionStyle}>
+              <label css={labelStyle}>Model Timeout (seconds)</label>
+              <input
+                type="number"
+                min={5}
+                max={600}
+                value={timeout}
+                onChange={(e) => setTimeoutValue(Number(e.target.value))}
+                disabled={settingsLoading}
+                css={inputStyle}
+              />
+              <label css={labelStyle}>Message Limit</label>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={messageLimit}
+                onChange={(e) => setMessageLimit(Number(e.target.value))}
+                disabled={settingsLoading}
+                css={inputStyle}
+              />
+              <label css={labelStyle}>Message Offset</label>
+              <input
+                type="number"
+                min={0}
+                max={1000}
+                value={messageOffset}
+                onChange={(e) => setMessageOffset(Number(e.target.value))}
+                disabled={settingsLoading}
+                css={inputStyle}
+              />
+              <button
+                onClick={saveSettingsHandler}
+                disabled={settingsLoading}
+                css={settingsDialogSaveButtonStyle}
+              >
+                {settingsLoading ? "Saving..." : "Save"}
+              </button>
+              {settingsSaved && (
+                <span style={{ color: "#10b981", marginLeft: 12 }}>Saved!</span>
+              )}
+              {settingsError && (
+                <span style={{ color: "#ef4444", marginLeft: 12 }}>
+                  {settingsError}
+                </span>
+              )}
+            </div>
+          </Accordion>
         </div>
       </div>
 

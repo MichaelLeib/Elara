@@ -13,6 +13,7 @@ import {
   createChatSession,
   deleteChatSession,
 } from "./api/chatApi";
+import { sendMessageWebSocket } from "./api/chatApi";
 
 const appStyle = css`
   display: flex;
@@ -216,11 +217,31 @@ function App() {
     model: string,
     attachments?: File[]
   ) => {
-    if (!message.trim() || !selectedSessionId) return;
+    if (!message.trim()) return;
 
     console.log("Sending message:", { message, model, attachments });
 
     setIsLoading(true);
+
+    // Create a session if none exists
+    let currentSessionId = selectedSessionId;
+    if (!currentSessionId) {
+      try {
+        // Create a meaningful title from the first message
+        const title =
+          message.length > 50 ? message.substring(0, 50) + "..." : message;
+        const response = await createChatSession(title);
+        const newSession = response.session;
+        setChatSessions((prev) => [newSession, ...prev]);
+        setSelectedSessionId(newSession.id);
+        currentSessionId = newSession.id;
+        clearMessages();
+      } catch (error) {
+        console.error("Error creating new chat session:", error);
+        setIsLoading(false);
+        return;
+      }
+    }
 
     // Add user message
     const userMessage: Message = {
@@ -248,78 +269,29 @@ function App() {
     addMessage(assistantMessage);
 
     try {
-      // Create a custom WebSocket connection with session_id
-      const wsUrl = `ws://localhost:8000/api/chat`;
-      const ws = new WebSocket(wsUrl);
-
-      await new Promise<void>((resolve, reject) => {
-        ws.onopen = () => {
-          // Send message with session_id
-          ws.send(
-            JSON.stringify({
-              message,
-              model,
-              session_id: selectedSessionId,
-            })
-          );
-          console.log("Message sent to WebSocket:", {
-            message,
-            model,
-            session_id: selectedSessionId,
-          });
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-
-            if (data.type === "chunk") {
-              // Update with new chunk
-              updateMessage(assistantMessageId, (prevMsg) => ({
-                message: (prevMsg?.message || "") + data.content,
-              }));
-            } else if (data.type === "done") {
-              // Mark as complete and preserve message content
-              updateMessage(assistantMessageId, (prevMsg) => ({
-                message: prevMsg?.message || "",
-                updated_at: new Date().toISOString(),
-              }));
-              ws.close();
-              resolve();
-            } else if (data.type === "error") {
-              // Update the assistant message with error
-              updateMessage(assistantMessageId, {
-                message: `Error: ${data.content}`,
-              });
-              ws.close();
-              reject(new Error(data.content));
-            } else {
-              // Fallback for non-streaming responses
-              updateMessage(assistantMessageId, {
-                message: event.data,
-              });
-              ws.close();
-              resolve();
-            }
-          } catch {
-            // If parsing fails, treat as plain text
+      await sendMessageWebSocket(
+        message,
+        model,
+        currentSessionId,
+        (chunk: string, done: boolean, error?: string) => {
+          if (error) {
+            // Update the assistant message with error
             updateMessage(assistantMessageId, {
-              message: event.data,
+              message: `Error: ${error}`,
             });
-            ws.close();
-            resolve();
+          } else if (done) {
+            // Mark as complete
+            updateMessage(assistantMessageId, {
+              updated_at: new Date().toISOString(),
+            });
+          } else {
+            // Update with new chunk
+            updateMessage(assistantMessageId, (prevMsg) => ({
+              message: (prevMsg?.message || "") + chunk,
+            }));
           }
-        };
-
-        ws.onerror = (event) => {
-          console.error("WebSocket error:", event);
-          reject(new Error("WebSocket connection failed"));
-        };
-
-        ws.onclose = () => {
-          console.log("WebSocket connection closed");
-        };
-      });
+        }
+      );
     } catch (error) {
       console.error("Failed to send message:", error);
       updateMessage(assistantMessageId, {
