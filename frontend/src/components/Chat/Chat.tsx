@@ -15,6 +15,7 @@ interface ChatProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  isPrivate?: boolean;
 }
 
 const chatContainerStyle = css`
@@ -38,6 +39,7 @@ export function Chat({
   onLoadMore,
   hasMore = false,
   isLoadingMore = false,
+  isPrivate,
 }: ChatProps) {
   const messageInputRef = useRef<MessageInputHandle>(null);
 
@@ -57,6 +59,7 @@ export function Chat({
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}
           onAppendToInput={handleAppendToInput}
+          isPrivate={isPrivate}
         />
       </ErrorBoundary>
 

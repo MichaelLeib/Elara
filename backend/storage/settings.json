@@ -8,6 +8,6 @@
     "MESSAGE_LIMIT": 5,
     "MESSAGE_OFFSET": 0
   },
-  "manual_model_switch": false,
+  "manual_model_switch": true,
   "summarization_prompt": "Analyze this conversation and provide insights:\n\nUser: {user_message}\nAssistant: {assistant_message}\n\nFocus on:\n- Technical issues mentioned\n- Solutions provided\n- Next steps for the user\n\nReturn as JSON with: key_insights, action_items, context_notes, conversation_summary, confidence_level, topics"
 }

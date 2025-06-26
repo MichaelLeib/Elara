@@ -15,6 +15,7 @@ export type MessageListProps = {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  isPrivate?: boolean;
 };
 
 export type MessageInputProps = {

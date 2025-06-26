@@ -5,6 +5,7 @@ import dayjs from "dayjs";
 import { Loader } from "../UI/Loader";
 import { FaArrowDown } from "react-icons/fa6";
 import { PiChatCircleDotsLight } from "react-icons/pi";
+import { FaLock } from "react-icons/fa6";
 import {
   enterButtonStyle,
   loadMoreStyle,
@@ -18,6 +19,7 @@ import {
 
 interface MessageListProps extends OriginalMessageListProps {
   onAppendToInput?: (text: string) => void;
+  isPrivate?: boolean;
 }
 
 const formatMessage = (message: string) => {
@@ -52,6 +54,7 @@ export function MessageList({
   hasMore = false,
   isLoadingMore = false,
   onAppendToInput,
+  isPrivate = false,
 }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollThreshold = 100; // pixels from top to trigger load more
@@ -199,12 +202,17 @@ export function MessageList({
           <div css={messageContainerStyle(false)}>
             <div css={messageBubbleStyle(false)}>
               <p>
-                <PiChatCircleDotsLight size={24} />
+                {isPrivate ? (
+                  <FaLock size={24} />
+                ) : (
+                  <PiChatCircleDotsLight size={24} />
+                )}
               </p>
 
               <p>
-                Start a new chat to get started. You can also create a private
-                chat.
+                {isPrivate
+                  ? "This is a private chat. Your messages will not be checked for memory. All chats are always only sent to your own AI model."
+                  : "What can I help you with?"}
               </p>
             </div>
           </div>

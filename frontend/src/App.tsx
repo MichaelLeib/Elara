@@ -386,6 +386,10 @@ function App() {
             onLoadMore={handleLoadMore}
             hasMore={hasMore}
             isLoadingMore={isLoadingMessages}
+            isPrivate={
+              chatSessions.find((session) => session.id === selectedSessionId)
+                ?.is_private || false
+            }
           />
         </div>
       </div>
