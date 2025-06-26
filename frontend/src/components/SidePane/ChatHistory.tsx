@@ -1,23 +1,21 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
-import { useState, useEffect } from "react";
-import { Icon } from "../UI/Icon";
-import dayjs from "dayjs";
-
-interface ChatSession {
-  index: number;
-  id: string;
-  title: string;
-  message_count: number;
-  created_at: string;
-  updated_at: string;
-}
+import { useState } from "react";
+import { updateChatSessionTitle } from "../../api/chatApi";
+import { FaPlus, FaPenToSquare, FaTrash, FaComments } from "react-icons/fa6";
 
 interface ChatHistoryProps {
-  onSelectChat: (chatIndex: number) => void;
-  selectedChatIndex: number | null;
   onNewChat: () => void;
-  onDeleteChat: (chatIndex: number) => void;
+  onSelectChat: (sessionId: string) => void;
+  selectedChatIndex: string | null;
+  onDeleteChat: (sessionId: string) => void;
+  chatSessions: Array<{
+    id: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+    message_count: number;
+  }>;
 }
 
 const chatHistoryContainerStyle = css`
@@ -73,6 +71,7 @@ const newChatButtonStyle = css`
   cursor: pointer;
   transition: box-shadow 0.2s ease;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  padding: 0;
 
   &:hover {
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
@@ -175,15 +174,15 @@ const chatUpdatedAtStyle = css`
   opacity: 0.7;
 `;
 
-const deleteButtonStyle = css`
+const chatActionButtonStyle = (isDelete: boolean) => css`
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 0.5rem;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: ${isDelete ? "#ef4444" : "#3b82f6"};
   border: none;
   cursor: pointer;
   transition: opacity 0.2s ease;
@@ -191,7 +190,11 @@ const deleteButtonStyle = css`
   margin-left: 0.5rem;
 
   &:hover {
-    background: rgba(239, 68, 68, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+    @media (prefers-color-scheme: dark) {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
   }
 `;
 
@@ -218,7 +221,7 @@ const emptyStateIconStyle = css`
 `;
 
 const editInputStyle = css`
-  width: 100%;
+  width: 94%;
   padding: 0.5rem;
   border: 1px solid #d1d5db;
   border-radius: 0.375rem;
@@ -240,119 +243,69 @@ const editInputStyle = css`
 `;
 
 export function ChatHistory({
+  onNewChat,
   onSelectChat,
   selectedChatIndex,
-  onNewChat,
   onDeleteChat,
+  chatSessions,
 }: ChatHistoryProps) {
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editingChatIndex, setEditingChatIndex] = useState<number | null>(null);
+  const [editingChatIndex, setEditingChatIndex] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
 
-  const fetchChatSessions = async () => {
-    try {
-      const response = await fetch("/api/chat-sessions");
-      if (response.ok) {
-        const data = await response.json();
-        setChatSessions(data.sessions || []);
-      }
-    } catch (error) {
-      console.error("Error fetching chat sessions:", error);
-    } finally {
-      setLoading(false);
-    }
+  const handleChatClick = (sessionId: string) => {
+    onSelectChat(sessionId);
   };
 
-  useEffect(() => {
-    fetchChatSessions();
-  }, []);
-
-  useEffect(() => {
-    const handleRefreshChatList = () => {
-      fetchChatSessions();
-    };
-
-    window.addEventListener("refreshChatList", handleRefreshChatList);
-
-    return () => {
-      window.removeEventListener("refreshChatList", handleRefreshChatList);
-    };
-  }, []);
-
-  const handleChatClick = (chatIndex: number) => {
-    onSelectChat(chatIndex);
-  };
-
-  const handleNewChatClick = async () => {
-    await onNewChat();
-    // Refresh the chat list after creating a new chat
-    await fetchChatSessions();
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent, chatIndex: number) => {
+  const handleDeleteClick = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
-    onDeleteChat(chatIndex);
+    onDeleteChat(sessionId);
   };
 
-  const handleEditSave = async () => {
+  const handleEditClick = (
+    e: React.MouseEvent,
+    sessionId: string,
+    title: string
+  ) => {
+    e.stopPropagation();
+    setEditingChatIndex(sessionId);
+    setEditingTitle(title);
+  };
+
+  const handleSaveTitle = async () => {
     if (editingChatIndex === null) return;
 
     try {
-      const response = await fetch(
-        `/api/chat-sessions/${editingChatIndex}/title`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ title: editingTitle }),
-        }
-      );
-
-      if (response.ok) {
-        setChatSessions((prev) =>
-          prev.map((chat) =>
-            chat.index === editingChatIndex
-              ? { ...chat, title: editingTitle }
-              : chat
-          )
-        );
-      }
-    } catch (error) {
-      console.error("Error updating chat title:", error);
-    } finally {
+      await updateChatSessionTitle(editingChatIndex, editingTitle);
       setEditingChatIndex(null);
       setEditingTitle("");
+      // Optionally refresh the chat sessions list
+      window.dispatchEvent(new CustomEvent("refreshChatList"));
+    } catch (error) {
+      console.error("Error updating chat title:", error);
     }
   };
 
-  const handleEditCancel = () => {
+  const handleCancelEdit = () => {
     setEditingChatIndex(null);
     setEditingTitle("");
   };
 
-  const handleEditKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleEditSave();
-    } else if (e.key === "Escape") {
-      handleEditCancel();
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+
+    if (diffInHours < 24) {
+      return date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } else if (diffInHours < 168) {
+      return date.toLocaleDateString([], { weekday: "short" });
+    } else {
+      return date.toLocaleDateString([], { month: "short", day: "numeric" });
     }
   };
-
-  if (loading) {
-    return (
-      <div css={chatHistoryContainerStyle}>
-        <div css={chatHistoryHeaderStyle}>
-          <h2 css={titleStyle}>Chat History</h2>
-        </div>
-        <div css={emptyStateStyle}>
-          <div css={emptyStateIconStyle}>⏳</div>
-          <p>Loading chats...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div css={chatHistoryContainerStyle}>
@@ -360,67 +313,76 @@ export function ChatHistory({
         <h2 css={titleStyle}>Chats</h2>
         <button
           css={newChatButtonStyle}
-          onClick={handleNewChatClick}
+          onClick={onNewChat}
           title="New Chat"
         >
-          <Icon
-            name="plus"
-            size={16}
-          />
+          <FaPlus size={14} />
         </button>
       </div>
 
       <div css={chatListStyle}>
         {chatSessions.length === 0 ? (
           <div css={emptyStateStyle}>
-            <div css={emptyStateIconStyle}>💬</div>
+            <div css={emptyStateIconStyle}>
+              <FaComments size={48} />
+            </div>
             <p>No chats yet</p>
             <p>Start a new conversation to see it here</p>
           </div>
         ) : (
           chatSessions.map((chat) => (
             <div
-              key={chat.index}
-              css={chatItemStyle(selectedChatIndex === chat.index)}
-              onClick={() => handleChatClick(chat.index)}
+              key={chat.id}
+              css={chatItemStyle(selectedChatIndex === chat.id)}
+              onClick={() => handleChatClick(chat.id)}
             >
               <div css={chatInfoStyle}>
-                {editingChatIndex === chat.index ? (
+                {editingChatIndex === chat.id ? (
                   <input
                     css={editInputStyle}
                     value={editingTitle}
                     onChange={(e) => setEditingTitle(e.target.value)}
-                    onKeyDown={handleEditKeyDown}
-                    onBlur={handleEditSave}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSaveTitle();
+                      } else if (e.key === "Escape") {
+                        handleCancelEdit();
+                      }
+                    }}
+                    onBlur={handleSaveTitle}
                     autoFocus
                   />
                 ) : (
+                  <div css={chatTitleStyle}>{chat.title}</div>
+                )}
+                <div css={chatMessagesNumberStyle}>
+                  {chat.message_count} messages
+                </div>
+                <div css={chatUpdatedAtStyle}>
+                  {formatDate(chat.updated_at)}
+                </div>
+              </div>
+
+              <div css={{ display: "flex", alignItems: "center" }}>
+                {editingChatIndex !== chat.id && (
                   <>
-                    <h3 css={chatTitleStyle}>{chat.title}</h3>
-                    <div css={chatMessagesNumberStyle}>
-                      {chat.message_count} messages
-                    </div>
-                    <div css={chatUpdatedAtStyle}>
-                      {dayjs(chat.updated_at).format("HH:mm MMM D, YYYY")}
-                    </div>
+                    <button
+                      css={chatActionButtonStyle(false)}
+                      onClick={(e) => handleEditClick(e, chat.id, chat.title)}
+                      title="Edit title"
+                    >
+                      <FaPenToSquare size={12} />
+                    </button>
+                    <button
+                      css={chatActionButtonStyle(true)}
+                      onClick={(e) => handleDeleteClick(e, chat.id)}
+                      title="Delete chat"
+                    >
+                      <FaTrash size={14} />
+                    </button>
                   </>
                 )}
               </div>
-
-              {editingChatIndex !== chat.index && (
-                <div css={{ display: "flex", alignItems: "center" }}>
-                  <button
-                    css={deleteButtonStyle}
-                    onClick={(e) => handleDeleteClick(e, chat.index)}
-                    title="Delete chat"
-                  >
-                    <Icon
-                      name="trash"
-                      size={14}
-                    />
-                  </button>
-                </div>
-              )}
             </div>
           ))
         )}

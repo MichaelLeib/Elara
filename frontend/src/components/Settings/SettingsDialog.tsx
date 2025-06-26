@@ -2,7 +2,6 @@
 import { css } from "@emotion/react";
 import { useState, useEffect } from "react";
 import { Button } from "../UI/Button";
-import { Icon } from "../UI/Icon";
 import { Accordion } from "../UI/Accordion";
 import {
   getMemory,
@@ -10,11 +9,11 @@ import {
   getAvailableModels,
   downloadModel,
   removeModel,
-  type MemoryEntry,
-  type AvailableModel,
-  type SystemInfo,
 } from "../../api/chatApi";
+import type { MemoryEntry, AvailableModel, SystemInfo } from "../../api/models";
 import { useSettings } from "../../context/useSettings";
+import { FaTrash } from "react-icons/fa6";
+import { IoClose } from "react-icons/io5";
 
 interface SettingsDialogProps {
   isOpen: boolean;
@@ -86,10 +85,14 @@ const titleStyle = css`
 const closeButtonStyle = css`
   background: none;
   border: none;
-  font-size: 24px;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   color: #6b7280;
-  padding: 4px;
+  padding: 0;
   border-radius: 4px;
   transition: color 0.2s;
 
@@ -361,7 +364,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   } = useSettings();
   const [memoryEntries, setMemoryEntries] = useState<MemoryEntry[]>([]);
   const [installedModels, setInstalledModels] = useState<AvailableModel[]>([]);
-  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
+  const [recommendedModels, setAvailableModels] = useState<AvailableModel[]>(
+    []
+  );
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloadingModels, setDownloadingModels] = useState<Set<string>>(
@@ -522,10 +527,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             css={closeButtonStyle}
             onClick={onClose}
           >
-            <Icon
-              name="close"
-              size={24}
-            />
+            <IoClose size={20} />
           </button>
         </div>
 
@@ -583,10 +585,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     onClick={() => removeMemoryEntry(index)}
                     title="Remove entry"
                   >
-                    <Icon
-                      name="delete"
-                      size={16}
-                    />
+                    <FaTrash size={14} />
                   </button>
                 </div>
               ))}
@@ -731,7 +730,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
           {/* Available Models Section (Accordion) */}
           <Accordion
-            title="Available Models"
+            title="Recommended Models"
             defaultOpen={false}
           >
             <p
@@ -745,7 +744,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
               models are not yet installed.
             </p>
             <div css={modelsListStyle}>
-              {availableModels.length === 0 ? (
+              {recommendedModels.length === 0 ? (
                 <div
                   style={{
                     padding: "16px",
@@ -753,10 +752,10 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                     color: "#9ca3af",
                   }}
                 >
-                  All available models are already installed.
+                  All recommended models are already installed.
                 </div>
               ) : (
-                availableModels.map((model) => (
+                recommendedModels.map((model) => (
                   <div
                     key={model.name}
                     css={modelCardStyle}

@@ -2,3 +2,5 @@ fastapi
 httpx
 uvicorn
 psutil
+numpy
+pydantic

@@ -1,7 +1,7 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
 import { useState } from "react";
-import { Icon } from "./Icon";
+import { FaChevronDown } from "react-icons/fa6";
 
 interface AccordionProps {
   title: string;
@@ -102,10 +102,9 @@ export function Accordion({
         type="button"
       >
         <h3 css={accordionTitleStyle}>{title}</h3>
-        <Icon
-          name="chevron-down"
-          size={20}
+        <FaChevronDown
           css={accordionIconStyle(isOpen)}
+          size={16}
         />
       </button>
       <div css={accordionContentStyle(isOpen)}>

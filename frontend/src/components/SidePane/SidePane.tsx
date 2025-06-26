@@ -2,14 +2,21 @@
 import { css } from "@emotion/react";
 import { useState, useEffect } from "react";
 import { SettingsDialog } from "../Settings/SettingsDialog";
-import { Icon } from "../UI/Icon";
+import { FaBars, FaGear } from "react-icons/fa6";
 import { ChatHistory } from "./ChatHistory";
 
 interface SidePaneProps {
-  onSelectChat: (chatIndex: number) => void;
-  selectedChatIndex: number | null;
+  onSelectChat: (sessionId: string) => void;
+  selectedChatIndex: string | null;
   onNewChat: () => void;
-  onDeleteChat: (chatIndex: number) => void;
+  onDeleteChat: (sessionId: string) => void;
+  chatSessions: Array<{
+    id: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+    message_count: number;
+  }>;
 }
 
 const drawerContainerStyle = css`
@@ -42,11 +49,16 @@ const toggleButtonStyle = css`
   top: 12px;
   left: 8px;
   z-index: 1001;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(255, 255, 255, 0.9);
   color: #374151;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0;
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 600;
@@ -142,7 +154,12 @@ const settingsButtonStyle = css`
   top: 0.75rem;
   right: 3.5rem;
   z-index: 1001;
-  padding: 0.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   margin: 0;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -153,9 +170,6 @@ const settingsButtonStyle = css`
   transition: all 0.2s ease;
   backdrop-filter: blur(8px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 
   &:hover {
     background: rgba(255, 255, 255, 1);
@@ -179,6 +193,7 @@ export function SidePane({
   selectedChatIndex,
   onNewChat,
   onDeleteChat,
+  chatSessions,
 }: SidePaneProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -202,8 +217,7 @@ export function SidePane({
   }, []);
 
   const toggleDrawer = () => {
-    const newState = !isOpen;
-    setIsOpen(newState);
+    setIsOpen(!isOpen);
   };
 
   const openSettingsDialog = () => {
@@ -217,41 +231,37 @@ export function SidePane({
   return (
     <>
       <div css={[drawerContainerStyle, isOpen && drawerOpenStyle]}>
-        {/* Toggle Button */}
         <button
           css={toggleButtonStyle}
           onClick={toggleDrawer}
         >
-          {isOpen ? "<" : ">"}
+          <FaBars size={16} />
         </button>
 
-        {/* Drawer Content */}
+        <button
+          css={settingsButtonStyle}
+          onClick={openSettingsDialog}
+        >
+          <FaGear size={16} />
+        </button>
+
         {isOpen && (
           <div css={drawerContentStyle}>
-            <button
-              css={settingsButtonStyle}
-              onClick={openSettingsDialog}
-            >
-              <Icon
-                name="settings"
-                size={18}
-              />
-            </button>
             <div css={drawerHeaderStyle}>
-              <h2 css={drawerTitleStyle}>
-                <ChatHistory
-                  onSelectChat={onSelectChat}
-                  selectedChatIndex={selectedChatIndex}
-                  onNewChat={onNewChat}
-                  onDeleteChat={onDeleteChat}
-                />
-              </h2>
+              <h2 css={drawerTitleStyle}>Chat History</h2>
             </div>
+
+            <ChatHistory
+              onNewChat={onNewChat}
+              onSelectChat={onSelectChat}
+              selectedChatIndex={selectedChatIndex}
+              onDeleteChat={onDeleteChat}
+              chatSessions={chatSessions}
+            />
           </div>
         )}
       </div>
 
-      {/* Settings Dialog */}
       <SettingsDialog
         isOpen={isSettingsOpen}
         onClose={closeSettingsDialog}

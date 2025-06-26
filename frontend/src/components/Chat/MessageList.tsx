@@ -3,7 +3,7 @@ import { useEffect, useRef, useCallback } from "react";
 import type { MessageListProps as OriginalMessageListProps } from "./models";
 import dayjs from "dayjs";
 import { Loader } from "../UI/Loader";
-import { Icon } from "../UI/Icon";
+import { FaArrowDown } from "react-icons/fa6";
 import {
   enterButtonStyle,
   loadMoreStyle,
@@ -182,10 +182,7 @@ export function MessageList({
                         title="Copy to input"
                         onClick={() => onAppendToInput(msg.message)}
                       >
-                        <Icon
-                          name="arrow-down"
-                          size={6}
-                        />
+                        <FaArrowDown size={8} />
                       </button>
                     )}
                   </>

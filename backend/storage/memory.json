@@ -1,3 +1,8 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "key": "user_preference",
+      "value": "prefers concise explanations"
+    }
+  ]
 }

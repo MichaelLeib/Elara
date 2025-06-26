@@ -10,7 +10,7 @@ export const useChatSessionMessages = () => {
 
   const loadMessages = useCallback(
     async (
-      chatIndex: number,
+      sessionId: string,
       settings: { message_limit: number; message_offset: number },
       limit?: number,
       offset?: number
@@ -18,7 +18,7 @@ export const useChatSessionMessages = () => {
       setIsLoading(true);
       try {
         const response = await getChatSessionMessages(
-          chatIndex,
+          sessionId,
           settings,
           limit,
           offset
@@ -43,12 +43,12 @@ export const useChatSessionMessages = () => {
 
   const loadMore = useCallback(
     async (
-      chatIndex: number,
+      sessionId: string,
       settings: { message_limit: number; message_offset: number },
       limit?: number
     ) => {
       if (!isLoading && hasMore) {
-        await loadMessages(chatIndex, settings, limit, messages.length);
+        await loadMessages(sessionId, settings, limit, messages.length);
       }
     },
     [isLoading, hasMore, messages.length, loadMessages]

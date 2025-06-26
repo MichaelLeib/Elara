@@ -12,6 +12,7 @@ import { useModels } from "../../context/ModelsContext.tsx";
 import { ErrorBoundary } from "../../ErrorBoundary";
 import type { MessageInputProps } from "./models";
 import type { Model } from "../../context/ModelsContext.tsx";
+import { FaPaperclip, FaChevronDown, FaArrowRight } from "react-icons/fa6";
 
 const messageInputContainerStyle = css`
   width: 100%;
@@ -512,20 +513,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
               type="button"
               title="Add attachment"
             >
-              <svg
-                width="20"
-                height="20"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
+              <FaPaperclip size={20} />
             </button>
             <input
               ref={fileInputRef}
@@ -560,19 +548,10 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
                           : "Invalid Model"
                         : "Select Model"}
                     </span>
-                    <svg
+                    <FaChevronDown
                       css={dropdownIconStyle(isDropdownOpen)}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
+                      size={16}
+                    />
                   </>
                 )}
               </button>
@@ -628,7 +607,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
               type="button"
               title="Send message"
             >
-              →
+              <FaArrowRight size={16} />
             </button>
           </ErrorBoundary>
         </div>

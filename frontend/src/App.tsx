@@ -8,6 +8,11 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import type { Message } from "./components/Chat/models";
 import { useChatSessionMessages } from "./hooks/useChatSessionMessages";
 import { useSettings } from "./context/useSettings";
+import {
+  getChatSessions,
+  createChatSession,
+  deleteChatSession,
+} from "./api/chatApi";
 
 const appStyle = css`
   display: flex;
@@ -121,10 +126,21 @@ const buttonStyle = (isPrimary: boolean) => css`
 `;
 
 function App() {
-  const [selectedChatIndex, setSelectedChatIndex] = useState<number | null>(1);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null
+  );
+  const [chatSessions, setChatSessions] = useState<
+    Array<{
+      id: string;
+      title: string;
+      created_at: string;
+      updated_at: string;
+      message_count: number;
+    }>
+  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [chatToDelete, setChatToDelete] = useState<number | null>(null);
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
   const { settings } = useSettings();
 
@@ -139,18 +155,35 @@ function App() {
     clearMessages,
   } = useChatSessionMessages();
 
+  // Load chat sessions on mount
+  useEffect(() => {
+    const loadChatSessions = async () => {
+      try {
+        const response = await getChatSessions();
+        setChatSessions(response.sessions);
+        // Select the first session if none is selected
+        if (!selectedSessionId && response.sessions.length > 0) {
+          setSelectedSessionId(response.sessions[0].id);
+        }
+      } catch (error) {
+        console.error("Error loading chat sessions:", error);
+      }
+    };
+    loadChatSessions();
+  }, []);
+
   const handleSelectChat = useCallback(
-    async (chatIndex: number) => {
+    async (sessionId: string) => {
       if (!settings) {
         console.warn("Settings not available yet, skipping chat selection");
         return;
       }
 
-      setSelectedChatIndex(chatIndex);
+      setSelectedSessionId(sessionId);
       clearMessages(); // Clear previous messages
       console.log("Settings in handleSelectChat:", settings); // Debug log
       await loadMessages(
-        chatIndex,
+        sessionId,
         settings,
         settings.message_limit,
         settings.message_offset
@@ -160,28 +193,19 @@ function App() {
   );
 
   const handleLoadMore = useCallback(async () => {
-    if (selectedChatIndex && settings) {
+    if (selectedSessionId && settings) {
       console.log("Settings in handleLoadMore:", settings); // Debug log
-      await loadMore(selectedChatIndex, settings, settings.message_limit);
+      await loadMore(selectedSessionId, settings, settings.message_limit);
     }
-  }, [selectedChatIndex, settings, loadMore]);
+  }, [selectedSessionId, settings, loadMore]);
 
   const handleNewChat = async () => {
     try {
-      const response = await fetch("http://localhost:8000/api/chat-sessions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ title: null }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const newChatIndex = data.session.index;
-        setSelectedChatIndex(newChatIndex);
-        clearMessages();
-      }
+      const response = await createChatSession("New Chat");
+      const newSession = response.session;
+      setChatSessions((prev) => [newSession, ...prev]);
+      setSelectedSessionId(newSession.id);
+      clearMessages();
     } catch (error) {
       console.error("Error creating new chat:", error);
     }
@@ -192,7 +216,7 @@ function App() {
     model: string,
     attachments?: File[]
   ) => {
-    if (!message.trim() || !selectedChatIndex) return;
+    if (!message.trim() || !selectedSessionId) return;
 
     console.log("Sending message:", { message, model, attachments });
 
@@ -224,24 +248,24 @@ function App() {
     addMessage(assistantMessage);
 
     try {
-      // Create a custom WebSocket connection with chat_index
+      // Create a custom WebSocket connection with session_id
       const wsUrl = `ws://localhost:8000/api/chat`;
       const ws = new WebSocket(wsUrl);
 
       await new Promise<void>((resolve, reject) => {
         ws.onopen = () => {
-          // Send message with chat_index
+          // Send message with session_id
           ws.send(
             JSON.stringify({
               message,
               model,
-              chat_index: selectedChatIndex,
+              session_id: selectedSessionId,
             })
           );
           console.log("Message sent to WebSocket:", {
             message,
             model,
-            chat_index: selectedChatIndex,
+            session_id: selectedSessionId,
           });
         };
 
@@ -308,8 +332,8 @@ function App() {
     }
   };
 
-  const handleDeleteChat = (chatIndex: number) => {
-    setChatToDelete(chatIndex);
+  const handleDeleteChat = (sessionId: string) => {
+    setChatToDelete(sessionId);
     setShowConfirmDialog(true);
   };
 
@@ -317,45 +341,46 @@ function App() {
     if (chatToDelete === null) return;
 
     try {
-      const response = await fetch(
-        `http://localhost:8000/api/chat-sessions/${chatToDelete}`,
-        {
-          method: "DELETE",
-        }
+      await deleteChatSession(chatToDelete);
+      setChatSessions((prev) =>
+        prev.filter((session) => session.id !== chatToDelete)
       );
 
-      if (response.ok) {
-        // If we deleted the currently selected chat, select the first available one
-        if (selectedChatIndex === chatToDelete) {
-          // This will trigger a refresh in the SidePane
-          setSelectedChatIndex(1);
+      // If we deleted the currently selected chat, select the first available one
+      if (selectedSessionId === chatToDelete) {
+        const remainingSessions = chatSessions.filter(
+          (session) => session.id !== chatToDelete
+        );
+        if (remainingSessions.length > 0) {
+          setSelectedSessionId(remainingSessions[0].id);
+        } else {
+          setSelectedSessionId(null);
         }
-        // Trigger a refresh of the chat list
-        window.dispatchEvent(new CustomEvent("refreshChatList"));
       }
     } catch (error) {
-      console.error("Error deleting chat session:", error);
+      console.error("Error deleting chat:", error);
     } finally {
       setShowConfirmDialog(false);
       setChatToDelete(null);
     }
   };
 
-  // Load initial chat on mount
+  // Load messages when selected session changes
   useEffect(() => {
-    if (selectedChatIndex && settings) {
-      handleSelectChat(selectedChatIndex);
+    if (selectedSessionId && settings) {
+      handleSelectChat(selectedSessionId);
     }
-  }, [selectedChatIndex, settings, handleSelectChat]);
+  }, [selectedSessionId, settings, handleSelectChat]);
 
   return (
     <ErrorBoundary>
       <div css={appStyle}>
         <SidePane
           onSelectChat={handleSelectChat}
-          selectedChatIndex={selectedChatIndex}
+          selectedChatIndex={selectedSessionId}
           onNewChat={handleNewChat}
           onDeleteChat={handleDeleteChat}
+          chatSessions={chatSessions}
         />
         <div css={appChatContainerStyle}>
           <Chat

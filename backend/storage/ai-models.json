@@ -1,67 +1,29 @@
 [
   {
-    "name": "tinyllama:1.1b",
-    "description": "Ultra-compact 1.1B parameter model optimized for speed and efficiency.",
-    "strengths": ["Extremely fast", "Very low memory usage", "Quick responses"],
-    "weaknesses": ["Basic reasoning", "Limited knowledge", "Simple outputs"],
-    "best_for": ["Quick responses", "Simple chat", "Basic tasks"],
-    "recommended_for": "Low-end hardware (2-4GB RAM, 2-4 cores)"
-  },
-  {
-    "name": "phi3:mini",
-    "description": "Microsoft's Phi-3 Mini model with strong reasoning capabilities for its size.",
-    "strengths": [
-      "Good reasoning",
-      "Code understanding",
-      "Efficient performance"
-    ],
-    "weaknesses": ["Limited knowledge base", "Basic document analysis"],
-    "best_for": ["Programming tasks", "Logical reasoning", "Code assistance"],
-    "recommended_for": "Mid-range hardware (4-8GB RAM, 4-6 cores)"
-  },
-  {
-    "name": "llama3:latest",
-    "description": "Latest Llama 3 model with balanced performance and modern capabilities.",
-    "strengths": ["Good reasoning", "Modern knowledge", "Balanced performance"],
-    "weaknesses": ["Moderate resource usage", "Not specialized"],
-    "best_for": ["General chat", "Modern topics", "Balanced tasks"],
-    "recommended_for": "Mid-high end hardware (6-12GB RAM, 4-8 cores)"
-  },
-  {
-    "name": "gemma:2b",
-    "description": "Google's Gemma 2B model with strong safety and reliability features.",
-    "strengths": ["Safety-focused", "Reliable outputs", "Good for beginners"],
-    "weaknesses": ["Limited reasoning", "Conservative responses"],
-    "best_for": [
-      "Safe interactions",
-      "Educational content",
-      "General assistance"
-    ],
-    "recommended_for": "Low-mid range hardware (4-8GB RAM, 4-6 cores)"
-  },
-  {
-    "name": "qwen2.5-coder:3b",
-    "description": "Alibaba's specialized coding model with strong programming capabilities.",
-    "strengths": [
-      "Excellent code generation",
-      "Programming expertise",
-      "Code analysis"
-    ],
-    "weaknesses": ["Limited general knowledge", "Higher resource usage"],
-    "best_for": [
-      "Software development",
-      "Code review",
-      "Technical programming"
-    ],
-    "recommended_for": "Mid-high end hardware (8-12GB RAM, 6-8 cores)"
-  },
-  {
     "name": "llama3.2:1b",
     "description": "Ultra-fast 1B parameter model, perfect for real-time chat with minimal resource usage.",
     "strengths": ["Speed", "Low memory usage", "Real-time responses"],
     "weaknesses": ["Limited reasoning", "Basic knowledge"],
     "best_for": ["Quick chat responses", "Simple tasks"],
     "recommended_for": "Low-end hardware (2-4GB RAM, 2-4 cores)"
+  },
+  {
+    "name": "dolphin-mistral:7b",
+    "description": "Mistral-based model fine-tuned for helpful and engaging conversations with strong reasoning capabilities.",
+    "strengths": [
+      "Excellent conversation quality",
+      "Strong reasoning",
+      "Helpful and engaging responses",
+      "Good code understanding"
+    ],
+    "weaknesses": ["Moderate resource usage", "Slower than smaller models"],
+    "best_for": [
+      "General chat",
+      "Complex conversations",
+      "Code assistance",
+      "Document analysis"
+    ],
+    "recommended_for": "Medium-high end hardware (4-16GB RAM, 4+ cores)"
   },
   {
     "name": "llama3.2:3b",
@@ -82,117 +44,5 @@
     "weaknesses": ["Higher memory usage", "Slower responses"],
     "best_for": ["Complex reasoning", "Document analysis", "Code assistance"],
     "recommended_for": "High-end hardware (8-16GB RAM, 8+ cores)"
-  },
-  {
-    "name": "llama3.2:70b",
-    "description": "Powerful 70B model with exceptional reasoning and comprehensive knowledge.",
-    "strengths": [
-      "Exceptional reasoning",
-      "Comprehensive knowledge",
-      "Advanced capabilities"
-    ],
-    "weaknesses": [
-      "High memory usage",
-      "Slow responses",
-      "Requires powerful hardware"
-    ],
-    "best_for": ["Complex analysis", "Advanced reasoning", "Research tasks"],
-    "recommended_for": "Workstation hardware (16GB+ RAM, 8+ cores)"
-  },
-  {
-    "name": "llava:7b",
-    "description": "Multimodal model capable of understanding and analyzing images.",
-    "strengths": [
-      "Image analysis",
-      "Visual reasoning",
-      "Multimodal capabilities"
-    ],
-    "weaknesses": ["Higher resource usage", "Slower than text-only models"],
-    "best_for": ["Image analysis", "Visual tasks", "Screenshot understanding"],
-    "recommended_for": "Mid-high end hardware (8GB+ RAM, 4+ cores)"
-  },
-  {
-    "name": "codellama:7b",
-    "description": "Specialized code generation and analysis model.",
-    "strengths": ["Code generation", "Code analysis", "Programming assistance"],
-    "weaknesses": ["Limited general knowledge", "Higher resource usage"],
-    "best_for": ["Programming", "Code review", "Technical documentation"],
-    "recommended_for": "Mid-high end hardware (8GB+ RAM, 4+ cores)"
-  },
-  {
-    "name": "mistral:7b",
-    "description": "Mistral AI's 7B model known for excellent reasoning and instruction following.",
-    "strengths": [
-      "Strong reasoning",
-      "Excellent instruction following",
-      "Good code generation"
-    ],
-    "weaknesses": ["Moderate resource usage", "Limited knowledge cutoff"],
-    "best_for": [
-      "Complex reasoning",
-      "Instruction following",
-      "Code assistance"
-    ],
-    "recommended_for": "Mid-high end hardware (8-12GB RAM, 4-8 cores)"
-  },
-  {
-    "name": "gemma2:9b",
-    "description": "Google's latest Gemma 2 9B model with improved reasoning and safety features.",
-    "strengths": ["Enhanced reasoning", "Safety-focused", "Good performance"],
-    "weaknesses": ["Conservative outputs", "Limited creativity"],
-    "best_for": [
-      "Safe AI interactions",
-      "Educational content",
-      "Professional tasks"
-    ],
-    "recommended_for": "Mid-high end hardware (8-12GB RAM, 6-8 cores)"
-  },
-  {
-    "name": "qwen2.5:7b",
-    "description": "Alibaba's general-purpose 7B model with strong multilingual capabilities.",
-    "strengths": [
-      "Multilingual support",
-      "Good reasoning",
-      "Balanced performance"
-    ],
-    "weaknesses": ["Moderate resource usage", "Not specialized"],
-    "best_for": [
-      "Multilingual chat",
-      "General assistance",
-      "International use"
-    ],
-    "recommended_for": "Mid-high end hardware (8-12GB RAM, 6-8 cores)"
-  },
-  {
-    "name": "phi3:14b",
-    "description": "Microsoft's larger Phi-3 model with enhanced reasoning and knowledge capabilities.",
-    "strengths": [
-      "Advanced reasoning",
-      "Strong code understanding",
-      "Good knowledge base"
-    ],
-    "weaknesses": ["Higher resource usage", "Slower responses"],
-    "best_for": [
-      "Advanced programming",
-      "Complex reasoning",
-      "Technical analysis"
-    ],
-    "recommended_for": "High-end hardware (12-16GB RAM, 8+ cores)"
-  },
-  {
-    "name": "deepseek-coder:6.7b",
-    "description": "DeepSeek's specialized coding model with exceptional programming capabilities.",
-    "strengths": [
-      "Excellent code generation",
-      "Advanced programming",
-      "Code analysis"
-    ],
-    "weaknesses": ["Limited general knowledge", "Higher resource usage"],
-    "best_for": [
-      "Software development",
-      "Code review",
-      "Technical programming"
-    ],
-    "recommended_for": "High-end hardware (12-16GB RAM, 8+ cores)"
   }
 ]
