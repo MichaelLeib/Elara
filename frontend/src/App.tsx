@@ -173,7 +173,7 @@ function App() {
       }
     };
     loadChatSessions();
-  }, []);
+  }, [selectedSessionId]);
 
   const handleSelectChat = useCallback(
     async (sessionId: string) => {

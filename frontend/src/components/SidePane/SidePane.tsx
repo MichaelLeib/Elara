@@ -91,40 +91,15 @@ const toggleButtonStyle = css`
 
 const drawerContentStyle = css`
   height: 100%;
-  overflow-y: auto;
   width: 320px;
   min-width: 320px;
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
 
   @media (prefers-color-scheme: dark) {
     background: rgba(15, 23, 42, 0.8);
-  }
-
-  /* Custom scrollbar */
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: rgba(156, 163, 175, 0.3);
-    border-radius: 3px;
-
-    @media (prefers-color-scheme: dark) {
-      background: rgba(75, 85, 99, 0.3);
-    }
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background: rgba(156, 163, 175, 0.5);
-
-    @media (prefers-color-scheme: dark) {
-      background: rgba(75, 85, 99, 0.5);
-    }
   }
 `;
 
@@ -135,6 +110,7 @@ const drawerHeaderStyle = css`
   align-items: center;
   margin-top: 1.1rem;
   padding-bottom: 1.5rem;
+  flex-shrink: 0;
 `;
 
 const drawerTitleStyle = css`
@@ -184,6 +160,38 @@ const settingsButtonStyle = css`
 
     &:hover {
       background: rgba(30, 41, 59, 1);
+    }
+  }
+`;
+
+const drawerScrollableContentStyle = css`
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+
+  /* Custom scrollbar */
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.3);
+    border-radius: 3px;
+
+    @media (prefers-color-scheme: dark) {
+      background: rgba(75, 85, 99, 0.3);
+    }
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.5);
+
+    @media (prefers-color-scheme: dark) {
+      background: rgba(75, 85, 99, 0.5);
     }
   }
 `;
@@ -252,14 +260,16 @@ export function SidePane({
               <h2 css={drawerTitleStyle}>Chat History</h2>
             </div>
 
-            <ChatHistory
-              onNewChat={onNewChat}
-              onNewPrivateChat={onNewPrivateChat}
-              onSelectChat={onSelectChat}
-              selectedChatIndex={selectedChatIndex}
-              onDeleteChat={onDeleteChat}
-              chatSessions={chatSessions}
-            />
+            <div css={drawerScrollableContentStyle}>
+              <ChatHistory
+                onNewChat={onNewChat}
+                onNewPrivateChat={onNewPrivateChat}
+                onSelectChat={onSelectChat}
+                selectedChatIndex={selectedChatIndex}
+                onDeleteChat={onDeleteChat}
+                chatSessions={chatSessions}
+              />
+            </div>
           </div>
         )}
       </div>

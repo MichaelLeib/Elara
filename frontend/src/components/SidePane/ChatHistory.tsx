@@ -29,7 +29,6 @@ interface ChatHistoryProps {
 const chatHistoryContainerStyle = css`
   display: flex;
   flex-direction: column;
-  height: 100%;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-right: 1px solid #e2e8f0;
   border-radius: 1.5rem;
@@ -41,6 +40,9 @@ const chatHistoryContainerStyle = css`
 `;
 
 const chatHistoryHeaderStyle = css`
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -49,6 +51,8 @@ const chatHistoryHeaderStyle = css`
   border-bottom: 1px solid #e2e8f0;
   backdrop-filter: blur(8px);
   border-radius: 1rem;
+  flex-shrink: 0;
+  min-height: 3rem;
 
   @media (prefers-color-scheme: dark) {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -117,6 +121,7 @@ const chatListStyle = css`
   flex: 1;
   overflow-y: auto;
   padding: 1rem;
+  min-height: 0;
 
   /* Custom scrollbar */
   &::-webkit-scrollbar {
