@@ -78,6 +78,8 @@ export interface Settings {
   timeout: number;
   message_limit: number;
   message_offset: number;
+  manual_model_switch: boolean;
+  summarization_prompt: string;
 }
 
 export interface ChatSession {
@@ -87,6 +89,7 @@ export interface ChatSession {
   updated_at: string;
   message_count: number;
   is_private?: boolean;
+  model?: string;
 }
 
 export interface ChatSessionsResponse {

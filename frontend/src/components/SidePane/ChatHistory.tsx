@@ -10,6 +10,7 @@ import {
   FaLock,
 } from "react-icons/fa6";
 import dayjs from "dayjs";
+import { useSettings } from "../../context/useSettings";
 
 interface ChatHistoryProps {
   onNewChat: () => void;
@@ -23,6 +24,7 @@ interface ChatHistoryProps {
     created_at: string;
     updated_at: string;
     message_count: number;
+    model?: string;
   }>;
 }
 
@@ -209,6 +211,17 @@ const chatMessagesNumberStyle = css`
   opacity: 0.7;
 `;
 
+const chatModelStyle = css`
+  font-size: 0.65rem;
+  opacity: 0.6;
+  color: #3b82f6;
+  font-weight: 500;
+
+  @media (prefers-color-scheme: dark) {
+    color: #60a5fa;
+  }
+`;
+
 const chatUpdatedAtStyle = css`
   font-size: 0.5rem;
   opacity: 0.7;
@@ -292,6 +305,7 @@ export function ChatHistory({
 }: ChatHistoryProps) {
   const [editingChatIndex, setEditingChatIndex] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const { settings } = useSettings();
 
   const handleChatClick = (sessionId: string) => {
     onSelectChat(sessionId);
@@ -391,6 +405,9 @@ export function ChatHistory({
                 <div css={chatMessagesNumberStyle}>
                   {chat.message_count} messages
                 </div>
+                {settings?.manual_model_switch && chat.model && (
+                  <div css={chatModelStyle}>{chat.model}</div>
+                )}
                 <div css={chatUpdatedAtStyle}>
                   {dayjs(chat.updated_at).format("MMM D, YYYY HH:mm")}
                 </div>

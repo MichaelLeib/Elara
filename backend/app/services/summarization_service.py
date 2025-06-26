@@ -62,10 +62,18 @@ CRITICAL: Respond with ONLY the JSON object. No other text."""
             Dict containing structured summary with key insights, action items, etc.
         """
         try:
-            # Prepare the prompt
-            prompt = self.summary_prompt_template.format(
-                user_message=user_message, assistant_message=assistant_message
-            )
+            # Use custom prompt from settings if available, otherwise use default
+            custom_prompt = settings.summarization_prompt.strip()
+            if custom_prompt:
+                # Use custom prompt with placeholders for user and assistant messages
+                prompt = custom_prompt.replace("{user_message}", user_message).replace(
+                    "{assistant_message}", assistant_message
+                )
+            else:
+                # Use default prompt template
+                prompt = self.summary_prompt_template.format(
+                    user_message=user_message, assistant_message=assistant_message
+                )
 
             # Get summary from Ollama
             response = await ollama_service.query_ollama(

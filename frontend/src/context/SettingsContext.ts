@@ -6,6 +6,8 @@ export interface Settings {
   message_offset: number;
   OLLAMA_URL: string;
   OLLAMA_MODEL: string;
+  manual_model_switch: boolean;
+  summarization_prompt: string;
 }
 
 interface SettingsContextType {

@@ -4,6 +4,7 @@ import type { MessageListProps as OriginalMessageListProps } from "./models";
 import dayjs from "dayjs";
 import { Loader } from "../UI/Loader";
 import { FaArrowDown } from "react-icons/fa6";
+import { PiChatCircleDotsLight } from "react-icons/pi";
 import {
   enterButtonStyle,
   loadMoreStyle,
@@ -147,52 +148,67 @@ export function MessageList({
           </div>
         )}
 
-        {validMessages.map((msg, index) => {
-          return (
-            <div
-              key={index}
-              css={messageContainerStyle(msg.user_id === "user")}
-            >
-              <div css={messageTimestampStyle()}>
-                {dayjs(msg.created_at).format("ddd, MMM D • HH:mm")}
-              </div>
-              {msg.user_id === "assistant" && (
-                <div css={messageModelStyle()}>
-                  {typeof msg.model === "string"
-                    ? msg.model
-                    : typeof msg.model === "object" && msg.model
-                    ? msg.model.name || "[Unknown Model]"
-                    : "[Invalid model]"}
-                </div>
-              )}
+        {validMessages.length > 0 ? (
+          validMessages.map((msg, index) => {
+            return (
               <div
-                css={messageBubbleStyle(msg.user_id === "user")}
-                style={{ position: "relative" }}
+                key={index}
+                css={messageContainerStyle(msg.user_id === "user")}
               >
-                {msg.message === "" && isThinking ? (
-                  <div css={thinkingContainerStyle}>
-                    <Loader />
+                <div css={messageTimestampStyle()}>
+                  {dayjs(msg.created_at).format("ddd, MMM D • HH:mm")}
+                </div>
+                {msg.user_id === "assistant" && (
+                  <div css={messageModelStyle()}>
+                    {typeof msg.model === "string"
+                      ? msg.model
+                      : typeof msg.model === "object" && msg.model
+                      ? msg.model.name || "[Unknown Model]"
+                      : "[Invalid model]"}
                   </div>
-                ) : typeof msg.message === "string" ? (
-                  <>
-                    {formatMessage(msg.message)}
-                    {msg.user_id === "user" && onAppendToInput && (
-                      <button
-                        css={enterButtonStyle}
-                        title="Copy to input"
-                        onClick={() => onAppendToInput(msg.message)}
-                      >
-                        <FaArrowDown size={8} />
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  "[Invalid message object]"
                 )}
+                <div
+                  css={messageBubbleStyle(msg.user_id === "user")}
+                  style={{ position: "relative" }}
+                >
+                  {msg.message === "" && isThinking ? (
+                    <div css={thinkingContainerStyle}>
+                      <Loader />
+                    </div>
+                  ) : typeof msg.message === "string" ? (
+                    <>
+                      {formatMessage(msg.message)}
+                      {msg.user_id === "user" && onAppendToInput && (
+                        <button
+                          css={enterButtonStyle}
+                          title="Copy to input"
+                          onClick={() => onAppendToInput(msg.message)}
+                        >
+                          <FaArrowDown size={8} />
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    "[Invalid message object]"
+                  )}
+                </div>
               </div>
+            );
+          })
+        ) : (
+          <div css={messageContainerStyle(false)}>
+            <div css={messageBubbleStyle(false)}>
+              <p>
+                <PiChatCircleDotsLight size={24} />
+              </p>
+
+              <p>
+                Start a new chat to get started. You can also create a private
+                chat.
+              </p>
             </div>
-          );
-        })}
+          </div>
+        )}
       </div>
     </div>
   );

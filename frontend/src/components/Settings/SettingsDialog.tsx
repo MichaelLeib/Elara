@@ -373,7 +373,7 @@ const downloadProgressStyle = css`
 
 const settingsDialogSettingsSectionStyle = css`
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -383,18 +383,6 @@ const settingsDialogSettingsSectionStyle = css`
 
   @media (prefers-color-scheme: dark) {
     border-top: 1px solid #334155;
-  }
-`;
-
-const labelStyle = css`
-  font-weight: 500;
-  font-size: 15px;
-  color: #1f2937;
-  display: block;
-  margin-bottom: 8px;
-
-  @media (prefers-color-scheme: dark) {
-    color: #f1f5f9;
   }
 `;
 
@@ -410,6 +398,131 @@ const settingsDialogSaveButtonStyle = css`
   @media (prefers-color-scheme: dark) {
     background: #3b82f6;
     color: white;
+  }
+`;
+
+const modelSettingsSectionStyle = css`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+`;
+
+const modelSettingsRowStyle = css`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+
+  @media (prefers-color-scheme: dark) {
+    background: #1e293b;
+    border: 1px solid #334155;
+  }
+`;
+
+const modelSettingsLabelStyle = css`
+  font-weight: 500;
+  font-size: 15px;
+  color: #1f2937;
+  min-width: 200px;
+
+  @media (prefers-color-scheme: dark) {
+    color: #f1f5f9;
+  }
+`;
+
+const modelSettingsDescriptionStyle = css`
+  color: #6b7280;
+  font-size: 14px;
+  flex: 1;
+
+  @media (prefers-color-scheme: dark) {
+    color: #9ca3af;
+  }
+`;
+
+const modelSettingsInputStyle = css`
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 120px;
+  transition: border-color 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: #374151;
+    border: 1px solid #4b5563;
+    color: #f1f5f9;
+  }
+`;
+
+const modelSettingsTextareaStyle = css`
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 200px;
+  height: 100px;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: #374151;
+    border: 1px solid #4b5563;
+    color: #f1f5f9;
+  }
+`;
+
+const modelSettingsCheckboxContainerStyle = css`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const modelSettingsCheckboxStyle = css`
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+`;
+
+const modelSettingsCheckboxLabelStyle = css`
+  font-weight: 500;
+  font-size: 15px;
+  color: #1f2937;
+  cursor: pointer;
+
+  @media (prefers-color-scheme: dark) {
+    color: #f1f5f9;
+  }
+`;
+
+const modelSettingsSaveSectionStyle = css`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+
+  @media (prefers-color-scheme: dark) {
+    border-top: 1px solid #334155;
   }
 `;
 
@@ -439,6 +552,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [messageOffset, setMessageOffset] = useState<number>(
     settings?.message_offset ?? 0
   );
+  const [manualModelSwitch, setManualModelSwitch] = useState<boolean>(
+    settings?.manual_model_switch ?? false
+  );
+  const [summarizationPrompt, setSummarizationPrompt] = useState<string>(
+    settings?.summarization_prompt ?? ""
+  );
   const [settingsSaved, setSettingsSaved] = useState(false);
 
   useEffect(() => {
@@ -453,6 +572,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       setTimeoutValue(settings.timeout);
       setMessageLimit(settings.message_limit);
       setMessageOffset(settings.message_offset);
+      setManualModelSwitch(settings.manual_model_switch);
+      setSummarizationPrompt(settings.summarization_prompt);
     }
   }, [settings]);
 
@@ -481,6 +602,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         timeout,
         message_limit: messageLimit,
         message_offset: messageOffset,
+        manual_model_switch: manualModelSwitch,
+        summarization_prompt: summarizationPrompt,
       });
       setSettingsSaved(true);
       await reloadSettings();
@@ -889,51 +1012,116 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             defaultOpen={false}
           >
             <div css={settingsDialogSettingsSectionStyle}>
-              <label css={labelStyle}>Model Timeout (seconds)</label>
-              <input
-                type="number"
-                min={5}
-                max={600}
-                value={timeout}
-                onChange={(e) => setTimeoutValue(Number(e.target.value))}
-                disabled={settingsLoading}
-                css={inputStyle}
-              />
-              <label css={labelStyle}>Message Limit</label>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={messageLimit}
-                onChange={(e) => setMessageLimit(Number(e.target.value))}
-                disabled={settingsLoading}
-                css={inputStyle}
-              />
-              <label css={labelStyle}>Message Offset</label>
-              <input
-                type="number"
-                min={0}
-                max={1000}
-                value={messageOffset}
-                onChange={(e) => setMessageOffset(Number(e.target.value))}
-                disabled={settingsLoading}
-                css={inputStyle}
-              />
-              <button
-                onClick={saveSettingsHandler}
-                disabled={settingsLoading}
-                css={settingsDialogSaveButtonStyle}
-              >
-                {settingsLoading ? "Saving..." : "Save"}
-              </button>
-              {settingsSaved && (
-                <span style={{ color: "#10b981", marginLeft: 12 }}>Saved!</span>
-              )}
-              {settingsError && (
-                <span style={{ color: "#ef4444", marginLeft: 12 }}>
-                  {settingsError}
-                </span>
-              )}
+              <div css={modelSettingsSectionStyle}>
+                {/* Model Settings */}
+                <div css={modelSettingsRowStyle}>
+                  <div css={modelSettingsLabelStyle}>
+                    Enable Manual Model Switching
+                  </div>
+                  <div css={modelSettingsDescriptionStyle}>
+                    When enabled, you can select different models for each chat
+                    session and see model names in the chat history.
+                  </div>
+                  <div css={modelSettingsCheckboxContainerStyle}>
+                    <input
+                      type="checkbox"
+                      checked={manualModelSwitch}
+                      onChange={(e) => setManualModelSwitch(e.target.checked)}
+                      disabled={settingsLoading}
+                      css={modelSettingsCheckboxStyle}
+                    />
+                    <label css={modelSettingsCheckboxLabelStyle}>
+                      {manualModelSwitch ? "Enabled" : "Disabled"}
+                    </label>
+                  </div>
+                </div>
+
+                <div css={modelSettingsRowStyle}>
+                  <label css={modelSettingsLabelStyle}>
+                    Model Timeout (seconds)
+                  </label>
+                  <div css={modelSettingsDescriptionStyle}>
+                    Maximum time to wait for model responses before timing out.
+                  </div>
+                  <input
+                    type="number"
+                    min={5}
+                    max={600}
+                    value={timeout}
+                    onChange={(e) => setTimeoutValue(Number(e.target.value))}
+                    disabled={settingsLoading}
+                    css={modelSettingsInputStyle}
+                  />
+                </div>
+
+                <div css={modelSettingsRowStyle}>
+                  <label css={modelSettingsLabelStyle}>Message Limit</label>
+                  <div css={modelSettingsDescriptionStyle}>
+                    Maximum number of messages to include in context for each
+                    chat session.
+                  </div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={messageLimit}
+                    onChange={(e) => setMessageLimit(Number(e.target.value))}
+                    disabled={settingsLoading}
+                    css={modelSettingsInputStyle}
+                  />
+                </div>
+
+                <div css={modelSettingsRowStyle}>
+                  <label css={modelSettingsLabelStyle}>Message Offset</label>
+                  <div css={modelSettingsDescriptionStyle}>
+                    Number of recent messages to skip when building context.
+                  </div>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1000}
+                    value={messageOffset}
+                    onChange={(e) => setMessageOffset(Number(e.target.value))}
+                    disabled={settingsLoading}
+                    css={modelSettingsInputStyle}
+                  />
+                </div>
+
+                <div css={modelSettingsRowStyle}>
+                  <label css={modelSettingsLabelStyle}>
+                    Summarization Prompt
+                  </label>
+                  <div css={modelSettingsDescriptionStyle}>
+                    Custom prompt to use for summarizing conversations.
+                  </div>
+                  <textarea
+                    value={summarizationPrompt}
+                    onChange={(e) => setSummarizationPrompt(e.target.value)}
+                    disabled={settingsLoading}
+                    css={modelSettingsTextareaStyle}
+                  />
+                </div>
+
+                <div css={modelSettingsSaveSectionStyle}>
+                  <button
+                    onClick={saveSettingsHandler}
+                    disabled={settingsLoading}
+                    css={settingsDialogSaveButtonStyle}
+                  >
+                    {settingsLoading ? "Saving..." : "Save Settings"}
+                  </button>
+                  {settingsSaved && (
+                    <span style={{ color: "#10b981", marginLeft: 12 }}>
+                      Saved!
+                    </span>
+                  )}
+                  {settingsError && (
+                    <span style={{ color: "#ef4444", marginLeft: 12 }}>
+                      {settingsError}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </Accordion>
         </div>

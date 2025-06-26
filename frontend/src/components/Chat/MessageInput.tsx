@@ -13,6 +13,7 @@ import { ErrorBoundary } from "../../ErrorBoundary";
 import type { MessageInputProps } from "./models";
 import type { Model } from "../../context/ModelsContext";
 import { FaPaperclip, FaChevronDown, FaArrowRight } from "react-icons/fa6";
+import { useSettings } from "../../context/useSettings";
 
 const messageInputContainerStyle = css`
   width: 100%;
@@ -401,6 +402,7 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     const { models, loading: isLoadingModels } = useModels();
+    const { settings } = useSettings();
 
     // Set default model when models are loaded
     useEffect(() => {
@@ -526,61 +528,63 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
           </ErrorBoundary>
 
           {/* Model Selection Dropdown */}
-          <ErrorBoundary>
-            <div css={dropdownContainerStyle}>
-              <button
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                disabled={disabled || isLoadingModels}
-                css={dropdownButtonStyle}
-                type="button"
-              >
-                {isLoadingModels ? (
-                  <div css={loadingSpinnerStyle}>
-                    <div css={spinnerStyle}></div>
-                    <span css={loadingTextStyle}>Loading...</span>
-                  </div>
-                ) : (
-                  <>
-                    <span css={dropdownTextStyle}>
-                      {typeof selectedModel === "object" && selectedModel
-                        ? typeof selectedModel.name === "string"
-                          ? selectedModel.name
-                          : "Invalid Model"
-                        : "Select Model"}
-                    </span>
-                    <FaChevronDown
-                      css={dropdownIconStyle(isDropdownOpen)}
-                      size={16}
-                    />
-                  </>
-                )}
-              </button>
+          {settings?.manual_model_switch && (
+            <ErrorBoundary>
+              <div css={dropdownContainerStyle}>
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  disabled={disabled || isLoadingModels}
+                  css={dropdownButtonStyle}
+                  type="button"
+                >
+                  {isLoadingModels ? (
+                    <div css={loadingSpinnerStyle}>
+                      <div css={spinnerStyle}></div>
+                      <span css={loadingTextStyle}>Loading...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <span css={dropdownTextStyle}>
+                        {typeof selectedModel === "object" && selectedModel
+                          ? typeof selectedModel.name === "string"
+                            ? selectedModel.name
+                            : "Invalid Model"
+                          : "Select Model"}
+                      </span>
+                      <FaChevronDown
+                        css={dropdownIconStyle(isDropdownOpen)}
+                        size={16}
+                      />
+                    </>
+                  )}
+                </button>
 
-              {isDropdownOpen && models.length > 0 && (
-                <div css={dropdownMenuStyle}>
-                  {models.map((model, index) => (
-                    <button
-                      key={index}
-                      onClick={() => {
-                        setSelectedModel(model);
-                        setIsDropdownOpen(false);
-                      }}
-                      css={dropdownItemStyle(
-                        selectedModel?.name === model.name
-                      )}
-                      type="button"
-                    >
-                      <div css={dropdownItemTextStyle}>
-                        {typeof model.name === "string"
-                          ? model.name
-                          : "Invalid Model Name"}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </ErrorBoundary>
+                {isDropdownOpen && models.length > 0 && (
+                  <div css={dropdownMenuStyle}>
+                    {models.map((model, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setSelectedModel(model);
+                          setIsDropdownOpen(false);
+                        }}
+                        css={dropdownItemStyle(
+                          selectedModel?.name === model.name
+                        )}
+                        type="button"
+                      >
+                        <div css={dropdownItemTextStyle}>
+                          {typeof model.name === "string"
+                            ? model.name
+                            : "Invalid Model Name"}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </ErrorBoundary>
+          )}
 
           {/* Textarea */}
           <ErrorBoundary>

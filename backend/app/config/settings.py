@@ -12,6 +12,8 @@ class Settings:
         self._timeout: float = 30.0
         self._message_limit: int = 5
         self._message_offset: int = 0
+        self._manual_model_switch: bool = False
+        self._summarization_prompt: str = ""
         self._load_settings()
 
     def _load_settings(self):
@@ -25,6 +27,8 @@ class Settings:
             chat_settings = settings.get("chat", {})
             self._message_limit = chat_settings.get("MESSAGE_LIMIT")
             self._message_offset = chat_settings.get("MESSAGE_OFFSET")
+            self._manual_model_switch = settings.get("manual_model_switch", False)
+            self._summarization_prompt = settings.get("summarization_prompt", "")
         except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
             print(f"Warning: Could not load settings.json: {e}")
             print("Using default settings...")
@@ -49,6 +53,14 @@ class Settings:
     def message_offset(self) -> int:
         return self._message_offset
 
+    @property
+    def manual_model_switch(self) -> bool:
+        return self._manual_model_switch
+
+    @property
+    def summarization_prompt(self) -> str:
+        return self._summarization_prompt
+
     def update_settings(
         self,
         ollama_url: Optional[str] = None,
@@ -56,6 +68,8 @@ class Settings:
         timeout: Optional[float] = None,
         message_limit: Optional[int] = None,
         message_offset: Optional[int] = None,
+        manual_model_switch: Optional[bool] = None,
+        summarization_prompt: Optional[str] = None,
     ):
         """Update settings and save to file"""
         if ollama_url:
@@ -68,6 +82,10 @@ class Settings:
             self._message_limit = message_limit
         if message_offset is not None:
             self._message_offset = message_offset
+        if manual_model_switch is not None:
+            self._manual_model_switch = manual_model_switch
+        if summarization_prompt is not None:
+            self._summarization_prompt = summarization_prompt
 
         # Save updated settings
         try:
@@ -81,6 +99,8 @@ class Settings:
                     "MESSAGE_LIMIT": self._message_limit,
                     "MESSAGE_OFFSET": self._message_offset,
                 },
+                "manual_model_switch": self._manual_model_switch,
+                "summarization_prompt": self._summarization_prompt,
             }
             with open("storage/settings.json", "w") as f:
                 json.dump(settings_data, f, indent=2)

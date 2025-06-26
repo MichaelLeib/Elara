@@ -28,6 +28,8 @@ async def get_settings():
         "timeout": settings.timeout,
         "message_limit": settings.message_limit,
         "message_offset": settings.message_offset,
+        "manual_model_switch": settings.manual_model_switch,
+        "summarization_prompt": settings.summarization_prompt,
     }
 
 
@@ -39,12 +41,16 @@ async def update_settings(request: Request):
     timeout = data.get("timeout")
     message_limit = data.get("message_limit")
     message_offset = data.get("message_offset")
+    manual_model_switch = data.get("manual_model_switch")
+    summarization_prompt = data.get("summarization_prompt")
     settings.update_settings(
         ollama_url=ollama_url,
         ollama_model=ollama_model,
         timeout=timeout,
         message_limit=message_limit,
         message_offset=message_offset,
+        manual_model_switch=manual_model_switch,
+        summarization_prompt=summarization_prompt,
     )
     return {
         "OLLAMA_URL": settings.OLLAMA_URL,
@@ -52,4 +58,6 @@ async def update_settings(request: Request):
         "timeout": settings.timeout,
         "message_limit": settings.message_limit,
         "message_offset": settings.message_offset,
+        "manual_model_switch": settings.manual_model_switch,
+        "summarization_prompt": settings.summarization_prompt,
     }
