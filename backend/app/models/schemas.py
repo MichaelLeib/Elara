@@ -95,4 +95,55 @@ class DiagnosticInfo(BaseModel):
     ollama_status: str
     available_models: List[str]
     running_models: List[str]
-    errors: List[str] 
+    errors: List[str]
+
+
+# Summary-related models
+class ConversationSummary(BaseModel):
+    key_insights: List[str]
+    action_items: List[str]
+    context_notes: List[str]
+    conversation_summary: str
+    confidence_level: str
+    topics: List[str]
+
+
+class SessionSummary(BaseModel):
+    key_insights: List[str]
+    action_items: List[str]
+    context_notes: List[str]
+    conversation_summary: str
+    confidence_level: str
+    topics: List[str]
+    session_quality: Optional[str] = None
+    recommended_follow_up: Optional[List[str]] = None
+    message_count: int
+
+
+class SummaryRequest(BaseModel):
+    user_message: str
+    assistant_message: str
+    model: Optional[str] = None
+
+
+class SessionSummaryRequest(BaseModel):
+    session_id: str
+    model: Optional[str] = None
+
+
+class SummaryResponse(BaseModel):
+    status: str
+    summary: ConversationSummary
+    summary_id: Optional[str] = None
+
+
+class SessionSummaryResponse(BaseModel):
+    status: str
+    summary: SessionSummary
+    summary_id: Optional[str] = None
+
+
+class SummaryInsightsResponse(BaseModel):
+    status: str
+    insights: List[str]
+    total_count: int

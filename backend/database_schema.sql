@@ -36,6 +36,34 @@ CREATE TABLE IF NOT EXISTS messages_meta (
     FOREIGN KEY (chat_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
 );
 
+-- Conversation summaries table
+CREATE TABLE IF NOT EXISTS conversation_summaries (
+    id TEXT PRIMARY KEY,  -- UUID
+    chat_id TEXT NOT NULL,
+    user_message_id TEXT NOT NULL,
+    assistant_message_id TEXT NOT NULL,
+    summary_data TEXT NOT NULL,  -- JSON containing structured summary
+    confidence_level TEXT NOT NULL,  -- high|medium|low
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chat_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_message_id) REFERENCES messages_meta(id) ON DELETE CASCADE,
+    FOREIGN KEY (assistant_message_id) REFERENCES messages_meta(id) ON DELETE CASCADE
+);
+
+-- Session summaries table
+CREATE TABLE IF NOT EXISTS session_summaries (
+    id TEXT PRIMARY KEY,  -- UUID
+    chat_id TEXT NOT NULL,
+    summary_data TEXT NOT NULL,  -- JSON containing structured summary
+    message_count INTEGER NOT NULL,
+    confidence_level TEXT NOT NULL,  -- high|medium|low
+    session_quality TEXT,  -- excellent|good|fair|poor
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chat_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+);
+
 -- Memory entries for AI context
 CREATE TABLE IF NOT EXISTS memory_entries (
     id TEXT PRIMARY KEY,  -- UUID
@@ -69,6 +97,10 @@ CREATE TABLE IF NOT EXISTS memory_embeddings (
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_messages_meta_chat_id ON messages_meta(chat_id);
 CREATE INDEX IF NOT EXISTS idx_messages_meta_created_at ON messages_meta(created_at);
+CREATE INDEX IF NOT EXISTS idx_conversation_summaries_chat_id ON conversation_summaries(chat_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_summaries_confidence ON conversation_summaries(confidence_level);
+CREATE INDEX IF NOT EXISTS idx_session_summaries_chat_id ON session_summaries(chat_id);
+CREATE INDEX IF NOT EXISTS idx_session_summaries_quality ON session_summaries(session_quality);
 CREATE INDEX IF NOT EXISTS idx_memory_category ON memory_entries(category);
 CREATE INDEX IF NOT EXISTS idx_memory_importance ON memory_entries(importance);
 CREATE INDEX IF NOT EXISTS idx_memory_last_accessed ON memory_entries(last_accessed);
@@ -84,6 +116,18 @@ CREATE TRIGGER IF NOT EXISTS update_messages_meta_updated_at
     AFTER UPDATE ON messages_meta
     BEGIN
         UPDATE messages_meta SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS update_conversation_summaries_updated_at 
+    AFTER UPDATE ON conversation_summaries
+    BEGIN
+        UPDATE conversation_summaries SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+    END;
+
+CREATE TRIGGER IF NOT EXISTS update_session_summaries_updated_at 
+    AFTER UPDATE ON session_summaries
+    BEGIN
+        UPDATE session_summaries SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
     END;
 
 CREATE TRIGGER IF NOT EXISTS update_memory_entries_updated_at 
@@ -118,4 +162,17 @@ SELECT
     last_accessed
 FROM memory_entries
 WHERE importance >= 5
-ORDER BY importance DESC, last_accessed DESC; 
+ORDER BY importance DESC, last_accessed DESC;
+
+CREATE VIEW IF NOT EXISTS high_confidence_summaries AS
+SELECT 
+    cs.id,
+    cs.chat_id,
+    cs.summary_data,
+    cs.confidence_level,
+    cs.created_at,
+    chat_sessions.title as chat_title
+FROM conversation_summaries cs
+JOIN chat_sessions ON cs.chat_id = chat_sessions.id
+WHERE cs.confidence_level IN ('high', 'medium')
+ORDER BY cs.created_at DESC; 

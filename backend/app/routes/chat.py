@@ -7,8 +7,16 @@ from app.models.schemas import (
     ChatSessionRequest,
     ChatSessionUpdateRequest,
     ChatMessageRequest,
+    SummaryRequest,
+    SessionSummaryRequest,
+    SummaryResponse,
+    SessionSummaryResponse,
+    SummaryInsightsResponse,
+    ConversationSummary,
+    SessionSummary,
 )
 from app.services.ollama_service import ollama_service
+from app.services.summarization_service import summarization_service
 from app.config.settings import settings
 from app.services.database_service import database_service
 
@@ -52,7 +60,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     )
 
                 # Save user message to session
-                database_service.add_message(
+                user_message_id = database_service.add_message(
                     chat_id=session_id,
                     user_id="user",
                     message=message,
@@ -74,12 +82,49 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
 
                 # Save assistant message to session
-                database_service.add_message(
+                assistant_message_id = database_service.add_message(
                     chat_id=session_id,
                     user_id="assistant",
                     message=full_response,
                     model=model,
                 )
+
+                # Generate and store conversation summary
+                try:
+                    summary_data = (
+                        await summarization_service.summarize_conversation_exchange(
+                            user_message=message,
+                            assistant_message=full_response,
+                            model=model,
+                        )
+                    )
+
+                    # Store the summary in database
+                    summary_id = database_service.add_conversation_summary(
+                        chat_id=session_id,
+                        user_message_id=user_message_id,
+                        assistant_message_id=assistant_message_id,
+                        summary_data=summary_data,
+                        confidence_level=summary_data.get("confidence_level", "low"),
+                    )
+
+                    # Send summary to client if confidence is high/medium
+                    if summary_data.get("confidence_level") in ["high", "medium"]:
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "summary",
+                                    "content": summary_data,
+                                    "summary_id": summary_id,
+                                    "done": True,
+                                }
+                            )
+                        )
+
+                except Exception as summary_error:
+                    # Log summary error but don't fail the chat
+                    print(f"Summary generation failed: {summary_error}")
+
             except Exception as e:
                 error_message = f"Error: {str(e)}"
                 await websocket.send_text(
@@ -115,9 +160,8 @@ async def get_chat_sessions():
 async def create_chat_session(request: ChatSessionRequest):
     """Create a new chat session"""
     try:
-        session_id = database_service.create_chat_session(
-            request.title, settings.OLLAMA_MODEL
-        )
+        title = request.title or "New Chat"
+        session_id = database_service.create_chat_session(title, settings.OLLAMA_MODEL)
         session = database_service.get_chat_session(session_id)
         return {
             "status": "success",
@@ -200,17 +244,176 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
             request.message, 30.0, request.model
         )
         # Add AI response
-        ai_message_id = database_service.add_message(
+        assistant_message_id = database_service.add_message(
             chat_id=session_id,
             user_id="assistant",
             message=ai_response,
             model=request.model,
         )
+
+        # Generate and store conversation summary
+        summary_data = await summarization_service.summarize_conversation_exchange(
+            user_message=request.message,
+            assistant_message=ai_response,
+            model=request.model,
+        )
+
+        summary_id = database_service.add_conversation_summary(
+            chat_id=session_id,
+            user_message_id=user_message_id,
+            assistant_message_id=assistant_message_id,
+            summary_data=summary_data,
+            confidence_level=summary_data.get("confidence_level", "low"),
+        )
+
         return {
             "status": "success",
             "user_message_id": user_message_id,
-            "ai_message_id": ai_message_id,
+            "ai_message_id": assistant_message_id,
             "ai_response": ai_response,
+            "summary": summary_data,
+            "summary_id": summary_id,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
+
+
+# Summary-related endpoints
+@router.post("/summarize-conversation", response_model=SummaryResponse)
+async def summarize_conversation_endpoint(request: SummaryRequest):
+    """Summarize a conversation exchange"""
+    try:
+        summary_data = await summarization_service.summarize_conversation_exchange(
+            user_message=request.user_message,
+            assistant_message=request.assistant_message,
+            model=request.model,
+        )
+
+        # Convert dict to ConversationSummary model
+        conversation_summary = ConversationSummary(**summary_data)
+
+        return SummaryResponse(
+            status="success",
+            summary=conversation_summary,
+            summary_id=None,  # Not stored in this endpoint
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate summary: {str(e)}"
+        )
+
+
+@router.post(
+    "/chat-sessions/{session_id}/summarize", response_model=SessionSummaryResponse
+)
+async def summarize_session_endpoint(session_id: str, request: SessionSummaryRequest):
+    """Summarize an entire chat session"""
+    try:
+        # Get all messages from the session
+        messages = database_service.get_messages(session_id, limit=1000, offset=0)
+
+        if len(messages) < 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Session must have at least 2 messages to summarize",
+            )
+
+        # Generate session summary
+        summary_data = await summarization_service.summarize_session_messages(
+            messages=messages, model=request.model
+        )
+
+        # Store session summary
+        summary_id = database_service.add_session_summary(
+            chat_id=session_id,
+            summary_data=summary_data,
+            message_count=len(messages),
+            confidence_level=summary_data.get("confidence_level", "low"),
+            session_quality=summary_data.get("session_quality"),
+        )
+
+        # Convert dict to SessionSummary model
+        session_summary = SessionSummary(**summary_data)
+
+        return SessionSummaryResponse(
+            status="success", summary=session_summary, summary_id=summary_id
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate session summary: {str(e)}"
+        )
+
+
+@router.get("/chat-sessions/{session_id}/summaries")
+async def get_session_summaries(session_id: str, limit: int = 50, offset: int = 0):
+    """Get conversation summaries for a chat session"""
+    try:
+        summaries = database_service.get_conversation_summaries(
+            chat_id=session_id, limit=limit, offset=offset
+        )
+        return {
+            "status": "success",
+            "summaries": summaries,
+            "total": len(summaries),
+            "has_more": offset + limit < len(summaries),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get summaries: {str(e)}"
+        )
+
+
+@router.get("/chat-sessions/{session_id}/summary")
+async def get_session_summary(session_id: str):
+    """Get the latest session summary"""
+    try:
+        summary = database_service.get_session_summary(chat_id=session_id)
+        if not summary:
+            raise HTTPException(status_code=404, detail="No session summary found")
+
+        return {
+            "status": "success",
+            "summary": summary,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get session summary: {str(e)}"
+        )
+
+
+@router.get(
+    "/chat-sessions/{session_id}/insights", response_model=SummaryInsightsResponse
+)
+async def get_session_insights(session_id: str, limit: int = 10):
+    """Get key insights from session summaries"""
+    try:
+        insights_data = database_service.get_summary_insights(
+            chat_id=session_id, limit=limit
+        )
+        # Convert list of dicts to list of strings
+        insights = [str(insight) for insight in insights_data]
+        return SummaryInsightsResponse(
+            status="success", insights=insights, total_count=len(insights)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get insights: {str(e)}")
+
+
+@router.get("/summaries/high-confidence")
+async def get_high_confidence_summaries(limit: int = 20):
+    """Get high confidence summaries across all sessions"""
+    try:
+        summaries = database_service.get_high_confidence_summaries(limit=limit)
+        return {
+            "status": "success",
+            "summaries": summaries,
+            "total": len(summaries),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get high confidence summaries: {str(e)}"
+        )

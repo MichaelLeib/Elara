@@ -361,6 +361,168 @@ class DatabaseService:
             except Exception as e:
                 print(f"Error migrating memory: {e}")
 
+    # Summary Operations
+    def add_conversation_summary(
+        self,
+        chat_id: str,
+        user_message_id: str,
+        assistant_message_id: str,
+        summary_data: Dict,
+        confidence_level: str,
+    ) -> str:
+        """Add a conversation summary"""
+        summary_id = str(uuid.uuid4())
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO conversation_summaries 
+                (id, chat_id, user_message_id, assistant_message_id, summary_data, confidence_level)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    summary_id,
+                    chat_id,
+                    user_message_id,
+                    assistant_message_id,
+                    json.dumps(summary_data),
+                    confidence_level,
+                ),
+            )
+            conn.commit()
+        return summary_id
+
+    def add_session_summary(
+        self,
+        chat_id: str,
+        summary_data: Dict,
+        message_count: int,
+        confidence_level: str,
+        session_quality: Optional[str] = None,
+    ) -> str:
+        """Add a session summary"""
+        summary_id = str(uuid.uuid4())
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO session_summaries 
+                (id, chat_id, summary_data, message_count, confidence_level, session_quality)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    summary_id,
+                    chat_id,
+                    json.dumps(summary_data),
+                    message_count,
+                    confidence_level,
+                    session_quality,
+                ),
+            )
+            conn.commit()
+        return summary_id
+
+    def get_conversation_summaries(
+        self, chat_id: str, limit: int = 50, offset: int = 0
+    ) -> List[Dict]:
+        """Get conversation summaries for a chat session"""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT cs.*, 
+                       um.message as user_message,
+                       am.message as assistant_message
+                FROM conversation_summaries cs
+                JOIN messages_meta um ON cs.user_message_id = um.id
+                JOIN messages_meta am ON cs.assistant_message_id = am.id
+                JOIN messages um_msg ON um.id = um_msg.id
+                JOIN messages am_msg ON am.id = am_msg.id
+                WHERE cs.chat_id = ?
+                ORDER BY cs.created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (chat_id, limit, offset),
+            )
+            summaries = []
+            for row in cursor.fetchall():
+                data = dict(row)
+                data["summary_data"] = json.loads(data["summary_data"])
+                summaries.append(data)
+            return summaries
+
+    def get_session_summary(self, chat_id: str) -> Optional[Dict]:
+        """Get the latest session summary for a chat session"""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM session_summaries 
+                WHERE chat_id = ? 
+                ORDER BY created_at DESC 
+                LIMIT 1
+                """,
+                (chat_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                data = dict(row)
+                data["summary_data"] = json.loads(data["summary_data"])
+                return data
+        return None
+
+    def get_high_confidence_summaries(self, limit: int = 20) -> List[Dict]:
+        """Get high confidence summaries across all sessions"""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT cs.*, chat_sessions.title as chat_title
+                FROM conversation_summaries cs
+                JOIN chat_sessions ON cs.chat_id = chat_sessions.id
+                WHERE cs.confidence_level IN ('high', 'medium')
+                ORDER BY cs.created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            summaries = []
+            for row in cursor.fetchall():
+                data = dict(row)
+                data["summary_data"] = json.loads(data["summary_data"])
+                summaries.append(data)
+            return summaries
+
+    def get_summary_insights(self, chat_id: str, limit: int = 10) -> List[Dict]:
+        """Get key insights from summaries for a chat session"""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT summary_data, confidence_level, created_at
+                FROM conversation_summaries
+                WHERE chat_id = ? AND confidence_level IN ('high', 'medium')
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (chat_id, limit),
+            )
+            insights = []
+            for row in cursor.fetchall():
+                summary_data = json.loads(row["summary_data"])
+                insights.extend(summary_data.get("key_insights", []))
+            return insights
+
+    def delete_conversation_summary(self, summary_id: str) -> bool:
+        """Delete a conversation summary"""
+        with self._get_connection() as conn:
+            conn.execute(
+                "DELETE FROM conversation_summaries WHERE id = ?", (summary_id,)
+            )
+            conn.commit()
+            return conn.total_changes > 0
+
+    def delete_session_summary(self, summary_id: str) -> bool:
+        """Delete a session summary"""
+        with self._get_connection() as conn:
+            conn.execute("DELETE FROM session_summaries WHERE id = ?", (summary_id,))
+            conn.commit()
+            return conn.total_changes > 0
+
 
 # Global database service instance
 database_service = DatabaseService()
