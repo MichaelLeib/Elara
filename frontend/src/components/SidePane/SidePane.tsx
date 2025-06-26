@@ -89,7 +89,6 @@ const toggleButtonStyle = css`
 `;
 
 const drawerContentStyle = css`
-  padding: 1.5rem;
   height: 100%;
   overflow-y: auto;
   width: 320px;
@@ -130,10 +129,10 @@ const drawerContentStyle = css`
 
 const drawerHeaderStyle = css`
   display: flex;
-  justify-content: space-between;
+  flex-direction: row;
+  justify-content: center;
   align-items: center;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
+  margin-top: 1.1rem;
   padding-bottom: 1.5rem;
 `;
 
@@ -152,7 +151,7 @@ const drawerTitleStyle = css`
 const settingsButtonStyle = css`
   position: absolute;
   top: 0.75rem;
-  right: 3.5rem;
+  right: 0.75rem;
   z-index: 1001;
   width: 2.5rem;
   height: 2.5rem;
