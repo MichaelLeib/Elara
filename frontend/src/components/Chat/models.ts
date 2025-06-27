@@ -22,6 +22,7 @@ export type MessageInputProps = {
   onSendMessage: (message: string, model: string, attachments?: File[]) => void;
   disabled?: boolean;
   placeholder?: string;
+  messages?: Message[];
 };
 
 export type Model = {

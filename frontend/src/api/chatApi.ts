@@ -1,5 +1,6 @@
 import config from "../assets/config.json";
 import type { Model } from "../components/Chat/models";
+import { processFilesForAnalysis } from "../utils/fileUtils";
 import type {
   AvailableModelsResponse,
   ChatHistoryResponse,
@@ -21,14 +22,22 @@ export async function sendMessageWebSocket(
   model?: string,
   session_id?: string,
   isPrivate: boolean = false,
-  onChunk?: (chunk: string, done: boolean, error?: string) => void
+  attachments?: File[],
+  onChunk?: (
+    chunk: string,
+    done: boolean,
+    error?: string,
+    progress?: number
+  ) => void
 ): Promise<void> {
   console.log("Sending message to WebSocket:", {
     message,
     model,
     session_id,
     isPrivate,
+    attachments: attachments?.map((f) => f.name),
   });
+
   // Convert HTTP URL to WebSocket URL
   const wsUrl =
     config.API_URL.replace("http://", "ws://").replace("https://", "wss://") +
@@ -37,20 +46,50 @@ export async function sendMessageWebSocket(
 
   return new Promise((resolve, reject) => {
     ws.onopen = () => {
-      const payload: {
-        message: string;
-        model?: string;
-        session_id?: string;
-        isPrivate: boolean;
-      } = { message, isPrivate };
-      if (model) {
-        payload.model = model;
-      }
-      if (session_id) {
-        payload.session_id = session_id;
-      }
-      ws.send(JSON.stringify(payload));
-      console.log("Message sent to WebSocket:", payload);
+      (async () => {
+        try {
+          const payload: {
+            message: string;
+            model?: string;
+            session_id?: string;
+            isPrivate: boolean;
+            files?: Array<{ filename: string; content: string }>;
+          } = { message, isPrivate };
+
+          if (model) {
+            payload.model = model;
+          }
+          if (session_id) {
+            payload.session_id = session_id;
+          }
+
+          // Process files if attachments are provided
+          if (attachments && attachments.length > 0) {
+            try {
+              const processedFiles = await processFilesForAnalysis(attachments);
+              payload.files = processedFiles;
+              console.log(
+                `Processed ${processedFiles.length} files for analysis`
+              );
+            } catch (error) {
+              console.error("Error processing files:", error);
+              reject(error);
+              ws.close();
+              return;
+            }
+          }
+
+          ws.send(JSON.stringify(payload));
+          console.log("Message sent to WebSocket:", {
+            ...payload,
+            files: payload.files ? `${payload.files.length} files` : undefined,
+          });
+        } catch (error) {
+          console.error("Error preparing message:", error);
+          reject(error);
+          ws.close();
+        }
+      })();
     };
 
     ws.onmessage = (event) => {
@@ -67,6 +106,42 @@ export async function sendMessageWebSocket(
           onChunk?.("", true, data.content);
           ws.close();
           reject(new Error(data.content));
+        } else if (data.type === "document_analysis") {
+          // Handle document analysis response
+          console.log("Frontend received document_analysis response:", {
+            contentLength: data.content?.length || 0,
+            metadata: data.metadata,
+            progress: data.progress,
+            done: data.done,
+          });
+          onChunk?.(data.content, true);
+          if (data.metadata) {
+            console.log("Document analysis metadata:", data.metadata);
+          }
+          ws.close();
+          resolve();
+        } else if (data.type === "document_analysis_chunk") {
+          // Handle streaming document analysis chunks
+          console.log(
+            "🔄 [WEBSOCKET] Frontend received document_analysis_chunk:",
+            {
+              contentLength: data.content?.length || 0,
+              progress: data.progress,
+              done: data.done,
+              content:
+                data.content?.substring(0, 100) +
+                (data.content?.length > 100 ? "..." : ""),
+            }
+          );
+          onChunk?.(data.content, false, undefined, data.progress);
+        } else if (data.type === "status") {
+          // Handle status updates (e.g., "Analyzing documents...")
+          console.log("🔄 [WEBSOCKET] Status update:", {
+            content: data.content,
+            progress: data.progress,
+            contentLength: data.content?.length || 0,
+          });
+          onChunk?.(data.content, false, undefined, data.progress);
         } else {
           // Fallback for non-streaming responses
           onChunk?.(event.data, true);

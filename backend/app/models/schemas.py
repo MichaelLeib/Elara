@@ -18,6 +18,22 @@ class WebSocketMessage(BaseModel):
     message: str
     model: str
     isPrivate: bool = True  # Default to private for backward compatibility
+    files: Optional[List[dict]] = None  # For document analysis
+
+
+class DocumentAnalysisRequest(BaseModel):
+    files: List[dict]  # List of file objects with filename and content
+    prompt: str
+    model: Optional[str] = None
+
+
+class DocumentAnalysisResponse(BaseModel):
+    status: str
+    analysis: str
+    documents_processed: int
+    method: str  # 'direct' or 'chunked'
+    total_text_length: Optional[int] = None
+    chunks_analyzed: Optional[int] = None
 
 
 class MemoryEntry(BaseModel):

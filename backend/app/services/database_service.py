@@ -189,12 +189,27 @@ class DatabaseService:
                 FROM messages m
                 JOIN messages_meta mm ON m.id = mm.id
                 WHERE mm.chat_id = ? 
-                ORDER BY mm.created_at ASC 
+                ORDER BY mm.created_at DESC 
                 LIMIT ? OFFSET ?
                 """,
                 (chat_id, limit, offset),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_message_count(self, chat_id: str) -> int:
+        """Get total count of messages for a chat session"""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT COUNT(*) as count
+                FROM messages m
+                JOIN messages_meta mm ON m.id = mm.id
+                WHERE mm.chat_id = ?
+                """,
+                (chat_id,),
+            )
+            row = cursor.fetchone()
+            return row["count"] if row else 0
 
     def search_messages(
         self, query: str, chat_id: Optional[str] = None, limit: int = 20

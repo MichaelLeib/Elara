@@ -2,6 +2,8 @@ import json
 import os
 from typing import Optional
 
+from docx import document
+
 
 class Settings:
     """Application settings management"""
@@ -23,12 +25,20 @@ class Settings:
                 settings = json.load(f)
             self._ollama_url = settings["model"]["OLLAMA_URL"]
             self._ollama_model = settings["model"]["OLLAMA_MODEL"]
-            self._timeout = settings.get("timeout")
+            document_settings = settings.get("document", {})
+            self._chunk_size = document_settings.get("CHUNK_SIZE")
+            self._chunk_overlap = document_settings.get("CHUNK_OVERLAP")
+            self._chunk_prompt = document_settings.get("CHUNK_PROMPT")
+            self._document_timeout = document_settings.get("TIMEOUT")
             chat_settings = settings.get("chat", {})
             self._message_limit = chat_settings.get("MESSAGE_LIMIT")
             self._message_offset = chat_settings.get("MESSAGE_OFFSET")
             self._manual_model_switch = settings.get("manual_model_switch", False)
             self._summarization_prompt = settings.get("summarization_prompt", "")
+            self._chat_timeout = chat_settings.get("MESSAGE_TIMEOUT")
+            image_settings = settings.get("image", {})
+            self._image_timeout = image_settings.get("IMAGE_TIMEOUT")
+            self._image_prompt = image_settings.get("IMAGE_PROMPT")
         except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
             print(f"Warning: Could not load settings.json: {e}")
             print("Using default settings...")
@@ -44,6 +54,10 @@ class Settings:
     @property
     def timeout(self) -> float:
         return self._timeout
+
+    @property
+    def document_timeout(self) -> float:
+        return getattr(self, "_document_timeout", 120.0) or 120.0
 
     @property
     def message_limit(self) -> int:

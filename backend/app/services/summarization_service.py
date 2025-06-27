@@ -48,7 +48,11 @@ Guidelines:
 CRITICAL: Respond with ONLY the JSON object. No other text."""
 
     async def summarize_conversation_exchange(
-        self, user_message: str, assistant_message: str, model: Optional[str] = None
+        self,
+        user_message: str,
+        assistant_message: str,
+        model: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> Dict:
         """
         Summarize a conversation exchange between user and assistant
@@ -57,6 +61,7 @@ CRITICAL: Respond with ONLY the JSON object. No other text."""
             user_message: The user's message
             assistant_message: The assistant's response
             model: Optional model to use for summarization
+            timeout: Optional timeout in seconds (default: 30.0, longer for document analysis)
 
         Returns:
             Dict containing structured summary with key insights, action items, etc.
@@ -75,10 +80,35 @@ CRITICAL: Respond with ONLY the JSON object. No other text."""
                     user_message=user_message, assistant_message=assistant_message
                 )
 
+            # Use provided timeout or default, with longer timeout for document analysis
+            if timeout is None:
+                # Check if this is a document analysis summary (contains longer assistant message)
+                if (
+                    len(assistant_message) > 1000
+                    or "Document Analysis Request:" in user_message
+                ):
+                    timeout = 60.0  # Longer timeout for document analysis
+                    print(
+                        f"[SummarizationService] Using longer timeout (60s) for document analysis summary (message_len={len(assistant_message)})"
+                    )
+                else:
+                    timeout = 30.0  # Default timeout for regular conversations
+                    print(
+                        f"[SummarizationService] Using default timeout (30s) for regular conversation summary (message_len={len(assistant_message)})"
+                    )
+            else:
+                print(
+                    f"[SummarizationService] Using provided timeout ({timeout}s) for summary generation"
+                )
+
             # Get summary from Ollama
-            response = await ollama_service.query_ollama(
-                prompt=prompt, timeout=30.0, model=model or settings.OLLAMA_MODEL
+            print(
+                f"[SummarizationService] Calling ollama_service.query_ollama with timeout={timeout}, prompt_len={len(prompt)}"
             )
+            response = await ollama_service.query_ollama(
+                prompt=prompt, timeout=timeout, model=model or settings.OLLAMA_MODEL
+            )
+            print(f"[SummarizationService] Summary generation completed successfully")
 
             # Parse the JSON response
             try:

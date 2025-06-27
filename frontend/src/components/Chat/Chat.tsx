@@ -23,11 +23,18 @@ const chatContainerStyle = css`
   flex-direction: column;
   max-width: 64rem;
   margin: 0 auto;
+  height: 100%;
+  min-height: 0;
+`;
+
+const chatMessageListContainerStyle = css`
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 `;
 
 const chatMessageInputContainerStyle = css`
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   width: 100%;
 `;
 
@@ -50,18 +57,20 @@ export function Chat({
   return (
     <div css={chatContainerStyle}>
       {/* Messages Area */}
-      <ErrorBoundary>
-        <MessageList
-          messages={messages}
-          isThinking={isLoading}
-          onNewChat={onNewChat}
-          onLoadMore={onLoadMore}
-          hasMore={hasMore}
-          isLoadingMore={isLoadingMore}
-          onAppendToInput={handleAppendToInput}
-          isPrivate={isPrivate}
-        />
-      </ErrorBoundary>
+      <div css={chatMessageListContainerStyle}>
+        <ErrorBoundary>
+          <MessageList
+            messages={messages}
+            isThinking={isLoading}
+            onNewChat={onNewChat}
+            onLoadMore={onLoadMore}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onAppendToInput={handleAppendToInput}
+            isPrivate={isPrivate}
+          />
+        </ErrorBoundary>
+      </div>
 
       {/* Message Input */}
       <div css={chatMessageInputContainerStyle}>
@@ -71,6 +80,7 @@ export function Chat({
             onSendMessage={onSendMessage}
             disabled={isLoading}
             placeholder="Type your message..."
+            messages={messages}
           />
         </ErrorBoundary>
       </div>

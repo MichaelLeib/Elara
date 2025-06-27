@@ -17,8 +17,8 @@ export const useChatHistory = () => {
     try {
       const response = await getChatHistory(limit, offset);
       if (offset === 0) {
-        // First load - replace all messages
-        setChatHistory(response.messages);
+        // First load - replace all messages and reverse to get newest at bottom
+        setChatHistory(response.messages.reverse());
       } else {
         // Load more - append to existing messages
         setChatHistory((prev) => [...prev, ...response.messages]);

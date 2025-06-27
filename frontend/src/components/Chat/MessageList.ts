@@ -122,7 +122,7 @@ export const messageBubbleStyle = (isUser: boolean) => css`
     ? `
     background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
     color: white;
-    border-bottom-right-radius: 0.5rem;
+    border-bottom-right-radius: 0.25rem;
     
     &:hover {
       box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
@@ -140,11 +140,11 @@ export const messageBubbleStyle = (isUser: boolean) => css`
     }
   `
     : `
-    background: #f8fafc;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
     color: #1f2937;
-    border-bottom-left-radius: 0.5rem;
-    border: 1px solid #e2e8f0;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.15);
+    border-bottom-left-radius: 0.25rem;
+    border: 1px solid lightgray;
+      box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.15);
     
     &:hover {
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.15);
@@ -163,7 +163,7 @@ export const messageBubbleStyle = (isUser: boolean) => css`
     }
     
     @media (prefers-color-scheme: dark) {
-      background: #1e293b;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
       color: #f1f5f9;
       border: 1px solid rgba(255, 255, 255, 0.1);
       
@@ -231,7 +231,7 @@ export const thinkingContainerStyle = css`
 
 export const loadMoreStyle = css`
   display: flex;
-  flex-direc
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 1rem;

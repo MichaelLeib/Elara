@@ -1,5 +1,6 @@
 import json
-from datetime import datetime
+import asyncio
+from typing import Optional, Union
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from app.models.schemas import (
     ChatRequest,
@@ -14,10 +15,13 @@ from app.models.schemas import (
     SummaryInsightsResponse,
     ConversationSummary,
     SessionSummary,
+    DocumentAnalysisRequest,
+    DocumentAnalysisResponse,
 )
 from app.services.ollama_service import ollama_service
 from app.services.summarization_service import summarization_service
 from app.services.context_service import context_service
+from app.services.document_service import document_service
 from app.config.settings import settings
 from app.services.database_service import database_service
 
@@ -39,18 +43,314 @@ async def websocket_endpoint(websocket: WebSocket):
                     is_private = parsed_data.get(
                         "isPrivate", True
                     )  # Default to private
+                    files = parsed_data.get(
+                        "files", None
+                    )  # Document files for analysis
                 else:
                     message = data or ""
                     model = settings.OLLAMA_MODEL
                     session_id = None
                     is_private = True
+                    files = None
             except json.JSONDecodeError:
                 message = data or ""
                 model = settings.OLLAMA_MODEL
                 session_id = None
                 is_private = True
+                files = None
 
             try:
+                # Handle document analysis if files are provided
+                if files and isinstance(files, list) and len(files) > 0:
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "status",
+                                "content": "Starting document analysis...",
+                                "progress": 5,
+                                "done": False,
+                            }
+                        )
+                    )
+
+                    try:
+                        # Validate files
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "status",
+                                    "content": "Validating uploaded files...",
+                                    "progress": 10,
+                                    "done": False,
+                                }
+                            )
+                        )
+
+                        for file_data in files:
+                            if (
+                                not isinstance(file_data, dict)
+                                or "filename" not in file_data
+                                or "content" not in file_data
+                            ):
+                                raise Exception(
+                                    "Invalid file format. Each file must have 'filename' and 'content' fields."
+                                )
+
+                            # Check if file type is supported
+                            if not document_service.is_supported_file(
+                                str(file_data["filename"])
+                            ):
+                                raise Exception(
+                                    f"Unsupported file type: {file_data['filename']}"
+                                )
+
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "status",
+                                    "content": "Files validated successfully",
+                                    "progress": 15,
+                                    "done": False,
+                                }
+                            )
+                        )
+
+                        # Perform document analysis with streaming
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "status",
+                                    "content": "Extracting text from documents...",
+                                    "progress": 20,
+                                    "done": False,
+                                }
+                            )
+                        )
+
+                        # Check if we should chunk the document
+                        should_chunk = document_service.should_chunk_documents(
+                            combined_text="",  # We'll get this from the analysis
+                            model_name=model,
+                        )
+
+                        if should_chunk:
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "status",
+                                        "content": "Document is large, preparing chunked analysis...",
+                                        "progress": 25,
+                                        "done": False,
+                                    }
+                                )
+                            )
+                        else:
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "status",
+                                        "content": "Document size is manageable, using direct analysis...",
+                                        "progress": 25,
+                                        "done": False,
+                                    }
+                                )
+                            )
+
+                        # Perform document analysis
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "status",
+                                    "content": "Analyzing document content with AI model...",
+                                    "progress": 30,
+                                    "done": False,
+                                }
+                            )
+                        )
+
+                        # Create progress callback function
+                        async def progress_callback(
+                            message: str, progress: Union[int, float]
+                        ):
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "status",
+                                        "content": message,
+                                        "progress": int(progress),
+                                        "done": False,
+                                    }
+                                )
+                            )
+
+                        # Create a wrapper that handles the async callback properly
+                        def sync_progress_callback(
+                            message: str, progress: Union[int, float]
+                        ):
+                            # Schedule the async callback to run
+                            asyncio.create_task(progress_callback(message, progress))
+
+                        analysis_result = await document_service.analyze_documents(
+                            files=files,
+                            prompt=message,
+                            model=model,
+                            progress_callback=sync_progress_callback,
+                        )
+
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "status",
+                                    "content": "Analysis complete, preparing results...",
+                                    "progress": 70,
+                                    "done": False,
+                                }
+                            )
+                        )
+
+                        # Stream the analysis result in chunks
+                        analysis_text = analysis_result["analysis"]
+                        chunk_size = 100
+
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "status",
+                                    "content": "Streaming analysis results...",
+                                    "progress": 75,
+                                    "done": False,
+                                }
+                            )
+                        )
+
+                        for i in range(0, len(analysis_text), chunk_size):
+                            chunk = analysis_text[i : i + chunk_size]
+                            progress = min(
+                                75 + (i / len(analysis_text)) * 20, 95
+                            )  # Progress from 75% to 95%
+
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "document_analysis_chunk",
+                                        "content": chunk,
+                                        "progress": int(progress),
+                                        "done": False,
+                                    }
+                                )
+                            )
+                            await asyncio.sleep(
+                                0.05
+                            )  # Small delay for smooth streaming
+
+                        # Send final completion message
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "document_analysis",
+                                    "content": analysis_result["analysis"],
+                                    "metadata": {
+                                        "documents_processed": analysis_result[
+                                            "documents_processed"
+                                        ],
+                                        "method": analysis_result["method"],
+                                        "total_text_length": analysis_result.get(
+                                            "total_text_length"
+                                        ),
+                                        "chunks_analyzed": analysis_result.get(
+                                            "chunks_analyzed"
+                                        ),
+                                    },
+                                    "progress": 100,
+                                    "done": True,
+                                }
+                            )
+                        )
+
+                        # Create a session to store the analysis if no session_id provided
+                        if not session_id:
+                            safe_title = f"Document Analysis: {message[:50]}{'...' if len(message) > 50 else ''}"
+                            session_id = database_service.create_chat_session(
+                                title=safe_title, model=model, is_private=is_private
+                            )
+
+                        # Save user message (the prompt) to session
+                        user_message_id = database_service.add_message(
+                            chat_id=session_id,
+                            user_id="user",
+                            message=f"Document Analysis Request: {message}",
+                            model=model,
+                        )
+
+                        # Save assistant response to session
+                        assistant_message_id = database_service.add_message(
+                            chat_id=session_id,
+                            user_id="assistant",
+                            message=analysis_result["analysis"],
+                            model=model,
+                        )
+
+                        # Generate and store conversation summary asynchronously in the background
+                        # This won't block the WebSocket response
+                        async def generate_summary_background():
+                            try:
+                                print(
+                                    f"[Background] Starting summary generation for session {session_id}"
+                                )
+                                summary_data = await summarization_service.summarize_conversation_exchange(
+                                    user_message=f"Document Analysis Request: {message}",
+                                    assistant_message=analysis_result["analysis"],
+                                    model=model,
+                                    timeout=60.0,  # Explicitly use longer timeout for document analysis
+                                )
+
+                                if session_id:  # Ensure session_id is not None
+                                    summary_id = (
+                                        database_service.add_conversation_summary(
+                                            chat_id=session_id,
+                                            user_message_id=user_message_id,
+                                            assistant_message_id=assistant_message_id,
+                                            summary_data=summary_data,
+                                            confidence_level=summary_data.get(
+                                                "confidence_level", "low"
+                                            ),
+                                        )
+                                    )
+
+                                    print(
+                                        f"[Background] Document analysis summary generated and stored (ID: {summary_id})"
+                                    )
+                                else:
+                                    print(
+                                        "[Background] No session_id available, skipping summary storage"
+                                    )
+
+                            except Exception as summary_error:
+                                print(
+                                    f"[Background] Summary generation failed: {summary_error}"
+                                )
+
+                        # Start the background task without waiting for it
+                        asyncio.create_task(generate_summary_background())
+
+                    except Exception as analysis_error:
+                        error_message = (
+                            f"Document analysis failed: {str(analysis_error)}"
+                        )
+                        await websocket.send_text(
+                            json.dumps(
+                                {
+                                    "type": "error",
+                                    "content": error_message,
+                                    "done": True,
+                                }
+                            )
+                        )
+                        print(f"Document analysis error: {analysis_error}")
+
+                    continue  # Skip regular chat processing for document analysis
+
+                # Regular chat processing (existing code)
                 # Create a session if none provided
                 if not session_id:
                     # Create a safe title from the message or use a default
@@ -240,7 +540,7 @@ async def add_message_to_chat_session_endpoint(
 async def get_chat_session_messages(session_id: str, limit: int, offset: int):
     """Get messages from a specific chat session with pagination"""
     messages = database_service.get_messages(session_id, limit=limit, offset=offset)
-    total = len(messages)
+    total = database_service.get_message_count(session_id)
     return {
         "messages": messages,
         "total": total,
@@ -463,3 +763,61 @@ async def get_high_confidence_summaries(limit: int = 20):
         raise HTTPException(
             status_code=500, detail=f"Failed to get high confidence summaries: {str(e)}"
         )
+
+
+@router.post("/analyze-documents", response_model=DocumentAnalysisResponse)
+async def analyze_documents_endpoint(request: DocumentAnalysisRequest):
+    """Analyze documents with a given prompt"""
+    try:
+        # Validate files
+        if not request.files or len(request.files) == 0:
+            raise HTTPException(status_code=400, detail="No files provided")
+
+        for file_data in request.files:
+            if (
+                not isinstance(file_data, dict)
+                or "filename" not in file_data
+                or "content" not in file_data
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid file format. Each file must have 'filename' and 'content' fields.",
+                )
+
+            # Check if file type is supported
+            if not document_service.is_supported_file(str(file_data["filename"])):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported file type: {file_data['filename']}",
+                )
+
+        # Perform document analysis
+        analysis_result = await document_service.analyze_documents(
+            files=request.files, prompt=request.prompt, model=request.model
+        )
+
+        return DocumentAnalysisResponse(
+            status=analysis_result["status"],
+            analysis=analysis_result["analysis"],
+            documents_processed=analysis_result["documents_processed"],
+            method=analysis_result["method"],
+            total_text_length=analysis_result.get("total_text_length"),
+            chunks_analyzed=analysis_result.get("chunks_analyzed"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Document analysis failed: {str(e)}"
+        )
+
+
+@router.get("/supported-file-types")
+async def get_supported_file_types():
+    """Get list of supported file types for document analysis"""
+    return {
+        "status": "success",
+        "supported_types": list(document_service.SUPPORTED_EXTENSIONS.keys()),
+        "mime_types": document_service.SUPPORTED_EXTENSIONS,
+    }

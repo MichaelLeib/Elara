@@ -4,3 +4,6 @@ uvicorn
 psutil
 numpy
 pydantic
+python-docx
+PyPDF2
+aiofiles

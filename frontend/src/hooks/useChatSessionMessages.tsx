@@ -24,11 +24,11 @@ export const useChatSessionMessages = () => {
           offset
         );
         if (offset === 0) {
-          // First load - replace all messages
-          setMessages(response.messages);
+          // First load - replace all messages and reverse to get newest at bottom
+          setMessages(response.messages.reverse());
         } else {
-          // Load more - append to existing messages
-          setMessages((prev) => [...prev, ...response.messages]);
+          // Load more - prepend older messages (since they come first in DESC order)
+          setMessages((prev) => [...response.messages, ...prev]);
         }
         setHasMore(response.has_more);
         setTotal(response.total);

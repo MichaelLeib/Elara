@@ -185,14 +185,8 @@ function App() {
       setSelectedSessionId(sessionId);
       clearMessages(); // Clear previous messages
       console.log("Settings in handleSelectChat:", settings); // Debug log
-      await loadMessages(
-        sessionId,
-        settings,
-        settings.message_limit,
-        settings.message_offset
-      );
     },
-    [settings, clearMessages, loadMessages]
+    [settings, clearMessages]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -295,22 +289,77 @@ function App() {
         model,
         currentSessionId,
         isPrivate,
-        (chunk: string, done: boolean, error?: string) => {
+        attachments,
+        (chunk: string, done: boolean, error?: string, progress?: number) => {
           if (error) {
             // Update the assistant message with error
             updateMessage(assistantMessageId, {
               message: `Error: ${error}`,
             });
+            setIsLoading(false);
           } else if (done) {
-            // Mark as complete
+            // Mark as complete - don't update message content since it's already accumulated
             updateMessage(assistantMessageId, {
               updated_at: new Date().toISOString(),
             });
+
+            // Stop streaming indicator
+            window.dispatchEvent(
+              new CustomEvent("message-streaming", {
+                detail: { isStreaming: false },
+              })
+            );
+
+            // Clear any progress indicators
+            window.dispatchEvent(
+              new CustomEvent("document-analysis-progress", {
+                detail: { progress: null, text: "" },
+              })
+            );
+
+            setIsLoading(false);
           } else {
-            // Update with new chunk
-            updateMessage(assistantMessageId, (prevMsg) => ({
-              message: (prevMsg?.message || "") + chunk,
-            }));
+            // Handle progress updates for document analysis
+            if (progress !== undefined) {
+              console.log(`🔄 [APP] Document analysis progress: ${progress}%`, {
+                chunk:
+                  chunk?.substring(0, 100) + (chunk?.length > 100 ? "..." : ""),
+                progress,
+                done,
+              });
+              // Dispatch progress event for MessageList to listen to
+              window.dispatchEvent(
+                new CustomEvent("document-analysis-progress", {
+                  detail: { progress, text: chunk },
+                })
+              );
+
+              // For document analysis progress, we might not want to update the message content
+              // unless it's actual content (not just status updates)
+              if (chunk && chunk.trim()) {
+                updateMessage(assistantMessageId, (prevMsg) => ({
+                  message: (prevMsg?.message || "") + chunk,
+                }));
+              }
+            } else {
+              // Regular streaming without progress - update with new chunk
+              console.log(`🔄 [APP] Regular streaming chunk:`, {
+                chunkLength: chunk?.length || 0,
+                chunk:
+                  chunk?.substring(0, 100) + (chunk?.length > 100 ? "..." : ""),
+                done,
+              });
+              updateMessage(assistantMessageId, (prevMsg) => ({
+                message: (prevMsg?.message || "") + chunk,
+              }));
+
+              // Dispatch streaming progress event for regular message streaming
+              window.dispatchEvent(
+                new CustomEvent("message-streaming", {
+                  detail: { isStreaming: true, text: chunk },
+                })
+              );
+            }
           }
         }
       );
@@ -321,7 +370,6 @@ function App() {
           error instanceof Error ? error.message : "Unknown error"
         }`,
       });
-    } finally {
       setIsLoading(false);
     }
   };
@@ -362,9 +410,16 @@ function App() {
   // Load messages when selected session changes
   useEffect(() => {
     if (selectedSessionId && settings) {
-      handleSelectChat(selectedSessionId);
+      clearMessages(); // Clear previous messages
+      console.log("Settings in useEffect:", settings); // Debug log
+      loadMessages(
+        selectedSessionId,
+        settings,
+        settings.message_limit,
+        settings.message_offset
+      );
     }
-  }, [selectedSessionId, settings, handleSelectChat]);
+  }, [selectedSessionId, settings, loadMessages, clearMessages]);
 
   return (
     <ErrorBoundary>
