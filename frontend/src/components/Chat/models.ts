@@ -1,3 +1,10 @@
+export type FileInfo = {
+  filename: string;
+  size?: number;
+  type?: string;
+  content?: string;
+};
+
 export type Message = {
   created_at: string;
   id: string;
@@ -5,6 +12,7 @@ export type Message = {
   model: string | Model;
   updated_at: string;
   user_id: string;
+  files?: FileInfo[];
 };
 
 export type MessageListProps = {

@@ -266,6 +266,11 @@ function App() {
       id: "",
       model: model,
       updated_at: new Date().toISOString(),
+      files: attachments?.map((file) => ({
+        filename: file.name,
+        size: file.size,
+        type: file.type,
+      })),
     };
 
     addMessage(userMessage);
@@ -290,12 +295,33 @@ function App() {
         currentSessionId,
         isPrivate,
         attachments,
-        (chunk: string, done: boolean, error?: string, progress?: number) => {
+        (
+          chunk: string,
+          done: boolean,
+          error?: string,
+          progress?: number,
+          clear?: boolean
+        ) => {
           if (error) {
             // Update the assistant message with error
             updateMessage(assistantMessageId, {
               message: `Error: ${error}`,
             });
+
+            // Stop streaming indicator
+            window.dispatchEvent(
+              new CustomEvent("message-streaming", {
+                detail: { isStreaming: false },
+              })
+            );
+
+            // Clear any progress indicators
+            window.dispatchEvent(
+              new CustomEvent("document-analysis-progress", {
+                detail: { progress: null, text: null },
+              })
+            );
+
             setIsLoading(false);
           } else if (done) {
             // Mark as complete - don't update message content since it's already accumulated
@@ -313,11 +339,26 @@ function App() {
             // Clear any progress indicators
             window.dispatchEvent(
               new CustomEvent("document-analysis-progress", {
-                detail: { progress: null, text: "" },
+                detail: { progress: null, text: null },
               })
             );
 
             setIsLoading(false);
+          } else if (clear) {
+            // Clear progress signal received - clear the message content and start fresh
+            console.log(
+              "🔄 [APP] Clear progress signal received, clearing message content"
+            );
+            updateMessage(assistantMessageId, {
+              message: "",
+            });
+
+            // Clear progress indicators
+            window.dispatchEvent(
+              new CustomEvent("document-analysis-progress", {
+                detail: { progress: null, text: null },
+              })
+            );
           } else {
             // Handle progress updates for document analysis
             if (progress !== undefined) {
@@ -334,9 +375,25 @@ function App() {
                 })
               );
 
-              // For document analysis progress, we might not want to update the message content
-              // unless it's actual content (not just status updates)
-              if (chunk && chunk.trim()) {
+              // For document analysis progress, ONLY update message content if it's actual analysis content
+              // NOT status updates (which are handled by the progress event above)
+              // Status updates typically contain phrases like "Processing", "Analyzing", etc.
+              const isStatusUpdate =
+                chunk &&
+                (chunk.includes("Processing") ||
+                  chunk.includes("Analyzing") ||
+                  chunk.includes("Validating") ||
+                  chunk.includes("Extracting") ||
+                  chunk.includes("Combining") ||
+                  chunk.includes("Preparing") ||
+                  chunk.includes("Document") ||
+                  chunk.includes("chunk") ||
+                  chunk.includes("Synthesizing") ||
+                  chunk.includes("Streaming") ||
+                  chunk.includes("complete"));
+
+              if (chunk && chunk.trim() && !isStatusUpdate) {
+                // This is actual analysis content, not a status update
                 updateMessage(assistantMessageId, (prevMsg) => ({
                   message: (prevMsg?.message || "") + chunk,
                 }));
@@ -370,6 +427,21 @@ function App() {
           error instanceof Error ? error.message : "Unknown error"
         }`,
       });
+
+      // Stop streaming indicator
+      window.dispatchEvent(
+        new CustomEvent("message-streaming", {
+          detail: { isStreaming: false },
+        })
+      );
+
+      // Clear any progress indicators
+      window.dispatchEvent(
+        new CustomEvent("document-analysis-progress", {
+          detail: { progress: null, text: null },
+        })
+      );
+
       setIsLoading(false);
     }
   };

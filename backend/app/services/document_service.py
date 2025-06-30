@@ -23,6 +23,9 @@ class ModelRegistry:
     # Known model context windows (in tokens)
     MODEL_CONTEXTS = {
         "tinyllama:1.1b": 2048,
+        "llama3.2:1b": 2048,
+        "llama3.2:3b": 4096,
+        "llama3.2:8b": 8192,
         "phi3:mini": 8192,
         "llama3:latest": 8192,
         "codellama:7b-instruct": 8192,
@@ -39,6 +42,12 @@ class ModelRegistry:
         "dolphin-mistral:7b",
         "deepseek-coder:6.7b",
         "codellama:7b-instruct",
+    }
+
+    # Small models that need special handling for document analysis
+    SMALL_MODELS = {
+        "tinyllama:1.1b",
+        "llama3.2:1b",
     }
 
     # Default context window for unknown models
@@ -63,7 +72,12 @@ class ModelRegistry:
         # Leave some buffer for response (about 25% of context)
         available_tokens = int(context_length * 0.75)
 
-        return estimated_tokens > available_tokens
+        should_chunk_result = estimated_tokens > available_tokens
+        print(
+            f"[DEBUG] ModelRegistry.should_chunk: text_len={len(text)}, model={model_name}, context_length={context_length}, estimated_tokens={estimated_tokens}, available_tokens={available_tokens}, should_chunk={should_chunk_result}"
+        )
+
+        return should_chunk_result
 
     @classmethod
     def get_optimal_chunk_size(cls, model_name: str, prompt_length: int = 500) -> int:
@@ -74,11 +88,19 @@ class ModelRegistry:
         # Convert tokens to characters (rough estimate)
         base_size = available_tokens * 4
 
+        # For small models, use much smaller chunks to ensure they can process effectively
+        if model_name in cls.SMALL_MODELS:
+            return int(base_size * 0.4)  # 40% of normal size for small models
         # For slow models, use much smaller chunks
-        if model_name in cls.SLOW_MODELS:
+        elif model_name in cls.SLOW_MODELS:
             return int(base_size * 0.3)  # 30% of normal size for slow models
 
         return base_size
+
+    @classmethod
+    def is_small_model(cls, model_name: str) -> bool:
+        """Check if a model is considered small and needs special handling"""
+        return model_name in cls.SMALL_MODELS
 
     @classmethod
     async def update_model_info(cls, model_name: str) -> None:
@@ -150,16 +172,31 @@ class DocumentService:
             else:
                 return min(40.0, base_timeout / 3)  # Standard chunked timeout
 
-        # For direct analysis, scale timeout based on document size
-        if text_length < 1000:
-            return min(30.0, base_timeout / 2)  # Small documents
+        # For direct analysis (including final summaries), scale timeout based on document size
+        # Be much more generous with timeouts for large documents to prevent premature timeouts
+        if text_length < 500:
+            # Very small documents - use generous timeout to account for model startup time
+            return min(60.0, base_timeout * 0.8)  # 80% of base timeout, max 60s
+        elif text_length < 1000:
+            # Small documents - use reasonable timeout
+            return min(45.0, base_timeout * 0.7)  # 70% of base timeout, max 45s
         elif text_length < 5000:
-            return min(60.0, base_timeout / 1.5)  # Medium documents
+            # Medium documents
+            return min(60.0, base_timeout * 0.8)  # 80% of base timeout, max 60s
         elif text_length < 15000:
-            return base_timeout  # Large documents use full timeout
+            # Large documents use full timeout
+            return base_timeout
+        elif text_length < 30000:
+            # Very large documents - use generous timeout
+            return min(180.0, base_timeout * 1.5)  # 150% of base timeout, max 3 minutes
+        elif text_length < 50000:
+            # Extremely large documents - use very generous timeout
+            return min(300.0, base_timeout * 2.0)  # 200% of base timeout, max 5 minutes
         else:
-            # Very large documents should be chunked, but if not, use shorter timeout
-            return min(90.0, base_timeout * 0.75)
+            # Massive documents - use maximum reasonable timeout
+            return min(
+                600.0, base_timeout * 3.0
+            )  # 300% of base timeout, max 10 minutes
 
     def get_model_aware_chunk_size(self, model_name: str) -> int:
         """Get chunk size optimized for the specific model"""
@@ -167,18 +204,33 @@ class DocumentService:
 
     def should_chunk_documents(self, combined_text: str, model_name: str) -> bool:
         """Determine if documents should be chunked based on model capabilities and document size"""
+        print(
+            f"[DEBUG] should_chunk_documents called with text length: {len(combined_text)}, model: {model_name}"
+        )
+
         # Check if it exceeds model context window
-        if ModelRegistry.should_chunk(combined_text, model_name):
+        context_chunk_needed = ModelRegistry.should_chunk(combined_text, model_name)
+        print(f"[DEBUG] Context chunk needed: {context_chunk_needed}")
+
+        if context_chunk_needed:
+            print(f"[DEBUG] Returning True due to context window")
             return True
 
         # Also chunk if document is very large (>15k chars) to prevent timeouts
         # Large documents can cause timeouts even if they fit in context
-        if len(combined_text) > 15000:
+        size_chunk_needed = len(combined_text) > 15000
+        print(
+            f"[DEBUG] Size chunk needed: {size_chunk_needed} (text length: {len(combined_text)})"
+        )
+
+        if size_chunk_needed:
             print(
                 f"[DocumentService] Document is large ({len(combined_text)} chars), chunking to prevent timeouts"
             )
+            print(f"[DEBUG] Returning True due to document size")
             return True
 
+        print(f"[DEBUG] Returning False - no chunking needed")
         return False
 
     def chunk_text(
@@ -267,8 +319,20 @@ class DocumentService:
         # Generate unique filename
         file_path = temp_dir / f"{os.urandom(8).hex()}_{filename}"
 
+        print(
+            f"[DocumentService] Saving file: {filename}, content size: {len(file_content)} bytes"
+        )
+
         async with aiofiles.open(file_path, "wb") as f:
             await f.write(file_content)
+
+        # Verify file was saved correctly
+        saved_size = os.path.getsize(file_path)
+        print(f"[DocumentService] File saved: {file_path}, size: {saved_size} bytes")
+        if saved_size != len(file_content):
+            print(
+                f"[DocumentService] WARNING: File size mismatch! Expected: {len(file_content)}, Actual: {saved_size}"
+            )
 
         return str(file_path)
 
@@ -304,19 +368,59 @@ class DocumentService:
             )
 
         try:
+            # Add file size debugging
+            file_size = os.path.getsize(file_path)
+            print(f"[DocumentService] PDF file size: {file_size} bytes")
+
             text_parts = []
+            total_pages = 0
+            pages_with_text = 0
 
             with open(file_path, "rb") as file:
                 pdf_reader = PyPDF2.PdfReader(file)
+                total_pages = len(pdf_reader.pages)
+                print(f"[DocumentService] PDF has {total_pages} pages")
 
                 for page_num, page in enumerate(pdf_reader.pages):
-                    page_text = page.extract_text()
-                    if page_text.strip():
-                        text_parts.append(f"Page {page_num + 1}:\n{page_text}")
+                    try:
+                        page_text = page.extract_text()
+                        if page_text and page_text.strip():
+                            text_parts.append(f"Page {page_num + 1}:\n{page_text}")
+                            pages_with_text += 1
+                            print(
+                                f"[DocumentService] Page {page_num + 1} has {len(page_text)} characters"
+                            )
+                        else:
+                            print(
+                                f"[DocumentService] Page {page_num + 1} has no extractable text (may be image-based)"
+                            )
+                    except Exception as page_error:
+                        print(
+                            f"[DocumentService] Error extracting text from page {page_num + 1}: {page_error}"
+                        )
 
-            return "\n\n".join(text_parts)
+            extracted_text = "\n\n".join(text_parts)
+            print(
+                f"[DocumentService] PDF extraction summary: {total_pages} total pages, {pages_with_text} pages with text, {len(extracted_text)} total characters"
+            )
+
+            if not extracted_text.strip():
+                # Check if this might be an image-based PDF
+                if total_pages > 0:
+                    raise Exception(
+                        f"PDF appears to be image-based or contains no extractable text. "
+                        f"Found {total_pages} pages but extracted 0 characters. "
+                        f"This type of PDF requires OCR (Optical Character Recognition) to extract text."
+                    )
+                else:
+                    raise Exception("PDF appears to be empty or corrupted")
+
+            return extracted_text
         except Exception as e:
-            raise Exception(f"Failed to extract text from PDF file: {str(e)}")
+            if "image-based" in str(e) or "no extractable text" in str(e):
+                raise e  # Re-raise our specific error
+            else:
+                raise Exception(f"Failed to extract text from PDF file: {str(e)}")
 
     async def extract_text_from_txt(self, file_path: str) -> str:
         """Extract text from plain text file"""
@@ -366,8 +470,35 @@ class DocumentService:
             f"[DocumentService] Starting analysis: model={model}, files={len(files)}, prompt='{prompt[:50]}...', settings_timeout={self.document_timeout}"
         )
 
+        # Check if model is available (basic check)
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"http://localhost:11434/api/tags")
+                if response.status_code != 200:
+                    print(
+                        f"[DocumentService] WARNING: Ollama service may not be responding properly (status: {response.status_code})"
+                    )
+                else:
+                    # Check if the specific model is available
+                    models_data = response.json()
+                    available_models = [
+                        m["name"] for m in models_data.get("models", [])
+                    ]
+                    if model not in available_models:
+                        print(
+                            f"[DocumentService] WARNING: Model '{model}' not found in available models: {available_models}"
+                        )
+                    else:
+                        print(f"[DocumentService] Model '{model}' is available")
+        except Exception as e:
+            print(
+                f"[DocumentService] WARNING: Could not check Ollama service status: {e}"
+            )
+
         if progress_callback:
-            progress_callback("Initializing analysis...", 35)
+            progress_callback("Preparing document analysis...", 5)
 
         try:
             # Extract text from all documents
@@ -381,7 +512,7 @@ class DocumentService:
                 if progress_callback:
                     progress_callback(
                         f"Processing file {i+1}/{len(files)}: {filename}",
-                        35 + (i / len(files)) * 10,
+                        5 + (i / len(files)) * 5,
                     )
 
                 # Handle base64-encoded content from frontend
@@ -403,19 +534,47 @@ class DocumentService:
 
                 if progress_callback:
                     progress_callback(
-                        f"Extracting text from {filename}...", 40 + (i / len(files)) * 5
+                        f"Extracting text from {filename}...", 10 + (i / len(files)) * 5
                     )
 
-                text = await self.extract_text_from_file(file_path, filename)
-                document_texts.append(
-                    {"filename": filename, "text": text, "length": len(text)}
-                )
-                print(
-                    f"[DocumentService] Extracted text from {filename}: {len(text)} chars"
-                )
+                try:
+                    text = await self.extract_text_from_file(file_path, filename)
+                    document_texts.append(
+                        {"filename": filename, "text": text, "length": len(text)}
+                    )
+                    print(
+                        f"[DocumentService] Extracted text from {filename}: {len(text)} chars"
+                    )
+                except Exception as extraction_error:
+                    error_msg = str(extraction_error)
+                    if "image-based" in error_msg or "no extractable text" in error_msg:
+                        # Special handling for image-based PDFs
+                        raise Exception(
+                            f"Unable to extract text from {filename}. "
+                            f"This appears to be an image-based PDF (scanned document) that requires OCR (Optical Character Recognition) to extract text. "
+                            f"Please try uploading a text-based PDF or a document with selectable text."
+                        )
+                    else:
+                        # General extraction error
+                        raise Exception(
+                            f"Failed to extract text from {filename}: {error_msg}. "
+                            f"Please ensure the file is not corrupted and contains readable text."
+                        )
 
             if progress_callback:
-                progress_callback("Combining document content...", 50)
+                progress_callback("Combining document content...", 15)
+
+            # Check if any text was extracted
+            total_extracted_text = sum(doc["length"] for doc in document_texts)
+            if total_extracted_text == 0:
+                raise Exception(
+                    "No text could be extracted from any of the uploaded documents. "
+                    "This may happen if:\n"
+                    "- The documents are image-based PDFs (scanned documents)\n"
+                    "- The documents are corrupted or empty\n"
+                    "- The documents contain no selectable text\n\n"
+                    "Please try uploading documents with selectable text or text-based PDFs."
+                )
 
             combined_text = (
                 "\n\n"
@@ -434,11 +593,13 @@ class DocumentService:
             print(
                 f"[DocumentService] Combined text length: {len(combined_text)} chars, estimated tokens: {estimated_tokens}, model context: {context_length}, should_chunk: {should_chunk}"
             )
+            print(f"[DEBUG] Main decision point - should_chunk: {should_chunk}")
 
             if should_chunk:
+                print(f"[DEBUG] Entering chunked analysis branch")
                 if progress_callback:
                     progress_callback(
-                        "Document is large, preparing chunked analysis...", 55
+                        "Document is large, using chunked analysis...", 20
                     )
                 print(f"[DocumentService] Using chunked analysis method.")
                 result = await self._analyze_documents_chunked(
@@ -457,9 +618,10 @@ class DocumentService:
                 print(f"[DocumentService] Chunked analysis complete. Returning result.")
                 return result
             else:
+                print(f"[DEBUG] Entering direct analysis branch")
                 if progress_callback:
                     progress_callback(
-                        "Document size is manageable, using direct analysis...", 55
+                        "Document size is manageable, using direct analysis...", 20
                     )
                 print(f"[DocumentService] Using direct analysis method.")
                 result = await self._analyze_documents_direct(
@@ -485,6 +647,34 @@ class DocumentService:
             await self._cleanup_temp_files(file_paths)
             raise e
 
+    def _get_optimized_prompt(
+        self, prompt: str, model_name: str, is_chunk: bool = False
+    ) -> str:
+        """Get an optimized prompt for the specific model"""
+
+        if ModelRegistry.is_small_model(model_name):
+            # For small models, use simpler, more direct prompts
+            if is_chunk:
+                return f"Extract key points about: {prompt}\n\nText: {{text}}\n\nKey points:"
+            else:
+                return f"Analyze this document and answer: {prompt}\n\nDocument:\n{{text}}\n\nAnswer:"
+        else:
+            # For larger models, use more detailed prompts
+            if is_chunk:
+                return f"""Extract key info relevant to: {prompt}
+
+Document: {{filename}} (Chunk {{chunk_index}})
+{{text}}
+
+Brief analysis focusing on the question:"""
+            else:
+                return f"""Analyze these documents and answer: {prompt}
+
+Documents:
+{{text}}
+
+Provide a clear, concise analysis addressing the question directly."""
+
     async def _analyze_documents_direct(
         self,
         combined_text: str,
@@ -495,7 +685,7 @@ class DocumentService:
     ) -> Dict[str, Any]:
         try:
             if progress_callback:
-                progress_callback("Preparing AI model request...", 60)
+                progress_callback("Preparing AI model request...", 25)
 
             timeout = self.calculate_timeout(
                 len(combined_text), is_chunked=False, model_name=model
@@ -505,18 +695,55 @@ class DocumentService:
             )
 
             if progress_callback:
-                progress_callback(
-                    f"Analyzing document with {model} (timeout: {timeout}s)...", 65
-                )
+                progress_callback(f"Analyzing document with {model}...", 30)
 
-            full_prompt = f"""Analyze these documents and answer: {prompt}\n\nDocuments:\n{combined_text}\n\nProvide a clear, concise analysis addressing the question directly."""
-            response = await ollama_service.query_ollama(full_prompt, timeout, model)
+            # Add a progress update during analysis to show it's working
+            if progress_callback:
+                progress_callback(f"Processing document content with {model}...", 50)
+
+            # Use optimized prompt for the model
+            prompt_template = self._get_optimized_prompt(prompt, model, is_chunk=False)
+            full_prompt = prompt_template.format(text=combined_text)
+
             print(
-                f"[DocumentService] [Direct] Model response received. Length: {len(str(response))}"
+                f"[DocumentService] [Direct] Full prompt length: {len(full_prompt)}, estimated tokens: {ModelRegistry.estimate_tokens(full_prompt)}"
             )
 
+            # Try up to 2 times for direct analysis
+            response = None
+            for attempt in range(2):
+                try:
+                    response = await ollama_service.query_ollama(
+                        full_prompt, timeout, model
+                    )
+                    print(
+                        f"[DocumentService] [Direct] Model response received. Length: {len(str(response))}"
+                    )
+                    break
+                except Exception as e:
+                    if attempt == 0:
+                        print(
+                            f"[DocumentService] [Direct] First attempt failed, retrying with longer timeout: {e}"
+                        )
+                        # Try with longer timeout on retry
+                        retry_timeout = timeout * 1.5
+                        try:
+                            response = await ollama_service.query_ollama(
+                                full_prompt, retry_timeout, model
+                            )
+                            print(f"[DocumentService] [Direct] Retry successful")
+                            break
+                        except Exception as retry_e:
+                            print(
+                                f"[DocumentService] [Direct] Retry also failed: {retry_e}"
+                            )
+                            raise retry_e
+                    else:
+                        print(f"[DocumentService] [Direct] Both attempts failed")
+                        raise e
+
             if progress_callback:
-                progress_callback("Analysis completed successfully", 95)
+                progress_callback("Analysis completed successfully", 100)
 
             return {
                 "status": "success",
@@ -545,7 +772,7 @@ class DocumentService:
     ) -> Dict[str, Any]:
         try:
             if progress_callback:
-                progress_callback("Preparing document chunks...", 60)
+                progress_callback("Preparing document chunks...", 25)
 
             all_chunks = []
             for doc in document_texts:
@@ -562,7 +789,7 @@ class DocumentService:
             )
 
             if progress_callback:
-                progress_callback(f"Split document into {len(all_chunks)} chunks", 65)
+                progress_callback(f"Split document into {len(all_chunks)} chunks", 30)
 
             chunk_analyses = []
 
@@ -578,6 +805,15 @@ class DocumentService:
             total_chunks = len(all_chunks)
             progress_per_chunk = (progress_end - progress_start) / max(total_chunks, 1)
 
+            # Add initial progress update for large files
+            if total_chunks > 10 and progress_callback:
+                progress_callback(
+                    f"Starting analysis of {total_chunks} document chunks...",
+                    int(progress_start + 1),
+                )
+                # Small delay to ensure progress is visible
+                await asyncio.sleep(0.1)
+
             for i, chunk in enumerate(all_chunks):
                 if progress_callback:
                     progress = progress_start + (i * progress_per_chunk)
@@ -586,10 +822,34 @@ class DocumentService:
                         int(progress),
                     )
 
-                chunk_prompt = f"""Extract key info relevant to: {prompt}\n\nDocument: {chunk['filename']} (Chunk {chunk['chunk_index'] + 1})\n{chunk['text']}\n\nBrief analysis focusing on the question:"""
+                # Use optimized prompt for the model
+                prompt_template = self._get_optimized_prompt(
+                    prompt, model, is_chunk=True
+                )
+                chunk_prompt = prompt_template.format(
+                    text=chunk["text"],
+                    filename=chunk["filename"],
+                    chunk_index=chunk["chunk_index"] + 1,
+                )
+
                 print(
                     f"[DocumentService] [Chunked] Calling ollama_service.query_ollama for chunk {chunk['chunk_index']+1} of {chunk['filename']} (chunk_len={len(chunk['text'])})"
                 )
+
+                # Add progress update during AI processing for large files
+                if total_chunks > 10 and progress_callback:
+                    # For files with many chunks, add intermediate progress updates
+                    mid_progress = (
+                        progress_start
+                        + (i * progress_per_chunk)
+                        + (progress_per_chunk * 0.3)
+                    )
+                    progress_callback(
+                        f"Processing chunk {i+1}/{total_chunks} with AI...",
+                        int(mid_progress),
+                    )
+                    # Small delay to ensure progress is visible
+                    await asyncio.sleep(0.1)
 
                 # Try up to 2 times for each chunk
                 analysis = None
@@ -646,7 +906,7 @@ class DocumentService:
                     )
 
             if progress_callback:
-                progress_callback("Combining chunk analyses...", 92)
+                progress_callback("Combining chunk analyses...", 85)
 
             combined_analyses = "\n\n".join(
                 [
@@ -659,21 +919,61 @@ class DocumentService:
             )
 
             if progress_callback:
-                progress_callback(f"Synthesizing final analysis with {model}...", 96)
+                progress_callback(f"Synthesizing final analysis with {model}...", 90)
 
-            final_prompt = f"""Synthesize this information to answer: {prompt}\n\nAnalyses:\n{combined_analyses}\n\nProvide a coherent, comprehensive answer:"""
+            # Use optimized final prompt for small models
+            if ModelRegistry.is_small_model(model):
+                final_prompt = f"Combine this information to answer: {prompt}\n\nAnalyses:\n{combined_analyses}\n\nAnswer:"
+            else:
+                final_prompt = f"""Synthesize this information to answer: {prompt}
+
+Analyses:
+{combined_analyses}
+
+Provide a coherent, comprehensive answer:"""
+
             print(
                 f"[DocumentService] [Chunked] Calling ollama_service.query_ollama for final summary with timeout={final_timeout}, combined_analyses_len={len(combined_analyses)}"
             )
-            final_analysis = await ollama_service.query_ollama(
-                final_prompt, final_timeout, model
-            )
-            print(
-                f"[DocumentService] [Chunked] Final summary response received. Length: {len(str(final_analysis))}"
-            )
+
+            # Try up to 3 times for the final summary with increasing timeouts
+            final_analysis = None
+            for attempt in range(3):
+                try:
+                    # Increase timeout on each retry attempt
+                    current_timeout = final_timeout * (
+                        1.0 + (attempt * 0.5)
+                    )  # 100%, 150%, 200% of original timeout
+                    print(
+                        f"[DocumentService] [Chunked] Final summary attempt {attempt + 1}/3 with timeout={current_timeout}s"
+                    )
+
+                    final_analysis = await ollama_service.query_ollama(
+                        final_prompt, current_timeout, model
+                    )
+                    print(
+                        f"[DocumentService] [Chunked] Final summary response received. Length: {len(str(final_analysis))}"
+                    )
+                    break
+                except Exception as e:
+                    if attempt < 2:  # Not the last attempt
+                        print(
+                            f"[DocumentService] [Chunked] Final summary attempt {attempt + 1} failed: {e}"
+                        )
+                        print(
+                            f"[DocumentService] [Chunked] Retrying with longer timeout..."
+                        )
+                        # Small delay before retry
+                        await asyncio.sleep(1)
+                    else:
+                        # Last attempt failed - use a fallback summary
+                        print(
+                            f"[DocumentService] [Chunked] All final summary attempts failed, using fallback"
+                        )
+                        final_analysis = f"[Final analysis synthesis failed - the model was unable to process the combined analysis. Here are the individual chunk analyses:\n\n{combined_analyses}]"
 
             if progress_callback:
-                progress_callback("Chunked analysis completed successfully", 100)
+                progress_callback("Analysis completed successfully", 100)
 
             return {
                 "status": "success",
@@ -706,51 +1006,76 @@ class DocumentService:
         Returns:
             tuple: (progress_start, progress_end) for chunk processing
         """
-        # Base progress allocation for chunk processing
-        base_chunk_progress = 25  # 25% of total progress for chunk processing
+        # Base progress allocation for chunk processing - AI analysis should get most of the progress
+        base_chunk_progress = 60  # 60% of total progress for chunk processing (was 25%)
 
         # Adjust based on model speed
         if model_name in ModelRegistry.SLOW_MODELS:
             # Slow models need more time, so allocate more progress space
-            chunk_progress = base_chunk_progress * 1.5  # 37.5%
+            chunk_progress = base_chunk_progress * 1.2  # 72%
         elif model_name in ["phi3:mini", "llama3:latest"]:
-            # Fast models can use less progress space
-            chunk_progress = base_chunk_progress * 0.8  # 20%
+            # Fast models can use less progress space but still need significant allocation
+            chunk_progress = base_chunk_progress * 0.9  # 54%
         else:
             chunk_progress = base_chunk_progress
 
-        # Adjust based on number of chunks
-        if total_chunks > 10:
+        # Adjust based on number of chunks - for very large files, ensure minimum progress per chunk
+        if total_chunks > 20:
+            # Very many chunks - ensure each chunk gets at least some progress, but cap at reasonable limits
+            # For very large files, we need to be more conservative with progress allocation
+            if total_chunks > 100:
+                # For extremely large files, use a smaller progress per chunk to stay within bounds
+                min_progress_per_chunk = 0.3  # 0.3% per chunk
+            elif total_chunks > 50:
+                # For very large files, use moderate progress per chunk
+                min_progress_per_chunk = 0.5  # 0.5% per chunk
+            else:
+                # For large files, use standard progress per chunk
+                min_progress_per_chunk = 1.0  # 1% per chunk
+
+            required_progress = total_chunks * min_progress_per_chunk
+            # Cap the required progress to prevent exceeding 100%
+            max_allowed_progress = 70  # Leave room for final synthesis (85-100%)
+            required_progress = min(required_progress, max_allowed_progress)
+            chunk_progress = max(chunk_progress, required_progress)
+            print(
+                f"[DocumentService] Large file detected ({total_chunks} chunks), using {min_progress_per_chunk}% per chunk, total progress: {chunk_progress}%"
+            )
+        elif total_chunks > 10:
             # Many chunks = more processing time
-            chunk_progress *= 1.3
+            chunk_progress *= 1.2
         elif total_chunks > 5:
             # Moderate number of chunks
             chunk_progress *= 1.1
         elif total_chunks <= 2:
-            # Few chunks = faster processing
-            chunk_progress *= 0.7
+            # Few chunks = faster processing but still significant time
+            chunk_progress *= 0.8
 
         # Adjust based on chunk size complexity
         if avg_chunk_size > 3000:
             # Large chunks take longer
-            chunk_progress *= 1.2
+            chunk_progress *= 1.1
         elif avg_chunk_size < 1000:
             # Small chunks are faster
-            chunk_progress *= 0.8
+            chunk_progress *= 0.9
 
         # Account for retry attempts
         if has_retries:
-            chunk_progress *= 1.1  # 10% extra for potential retries
+            chunk_progress *= 1.05  # 5% extra for potential retries
 
-        # Ensure reasonable bounds
-        chunk_progress = max(15, min(45, chunk_progress))
+        # Calculate start and end points - start from 30% (after file processing)
+        progress_start = 30
 
-        # Calculate start and end points
-        progress_start = 65
-        progress_end = progress_start + int(chunk_progress)
+        # Ensure we don't exceed 85% to leave room for final synthesis (85-100%)
+        max_progress_end = 85
+        progress_end = min(progress_start + int(chunk_progress), max_progress_end)
+
+        # Ensure minimum progress range for very small files
+        if progress_end <= progress_start:
+            progress_end = progress_start + 10  # At least 10% progress
 
         print(
-            f"[DocumentService] Progress calculation: chunks={total_chunks}, model={model_name}, avg_chunk_size={avg_chunk_size}, progress_range={progress_start}-{progress_end}"
+            f"[DocumentService] Progress calculation: chunks={total_chunks}, model={model_name}, avg_chunk_size={avg_chunk_size}, progress_range={progress_start}-{progress_end}, progress_per_chunk={((progress_end - progress_start) / max(total_chunks, 1)):.2f}%"
         )
 
         return progress_start, progress_end

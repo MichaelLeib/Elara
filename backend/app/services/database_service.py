@@ -37,6 +37,20 @@ class DatabaseService:
                 with open(schema_path, "r") as f:
                     schema = f.read()
                 conn.executescript(schema)
+
+            # Handle migration for adding files column to messages_meta table
+            try:
+                # Check if files column exists
+                cursor = conn.execute("PRAGMA table_info(messages_meta)")
+                columns = [column[1] for column in cursor.fetchall()]
+
+                if "files" not in columns:
+                    print("Adding files column to messages_meta table...")
+                    conn.execute("ALTER TABLE messages_meta ADD COLUMN files TEXT")
+                    print("Files column added successfully")
+            except Exception as e:
+                print(f"Migration error (this is normal for new databases): {e}")
+
             conn.commit()
 
     def _get_connection(self):
@@ -154,7 +168,14 @@ class DatabaseService:
             return conn.total_changes > 0
 
     # Message Operations
-    def add_message(self, chat_id: str, user_id: str, message: str, model: str) -> str:
+    def add_message(
+        self,
+        chat_id: str,
+        user_id: str,
+        message: str,
+        model: str,
+        files: Optional[List[Dict]] = None,
+    ) -> str:
         """Add a message to a chat session"""
         message_id = str(uuid.uuid4())
         with self._get_connection() as conn:
@@ -166,8 +187,14 @@ class DatabaseService:
 
             # Insert into regular table for foreign key relationships
             conn.execute(
-                "INSERT INTO messages_meta (id, chat_id, user_id, model, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-                (message_id, chat_id, user_id, model),
+                "INSERT INTO messages_meta (id, chat_id, user_id, model, files, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                (
+                    message_id,
+                    chat_id,
+                    user_id,
+                    model,
+                    json.dumps(files) if files else None,
+                ),
             )
 
             # Update chat session timestamp
@@ -185,7 +212,7 @@ class DatabaseService:
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at
+                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
                 FROM messages m
                 JOIN messages_meta mm ON m.id = mm.id
                 WHERE mm.chat_id = ? 
@@ -194,7 +221,19 @@ class DatabaseService:
                 """,
                 (chat_id, limit, offset),
             )
-            return [dict(row) for row in cursor.fetchall()]
+            messages = []
+            for row in cursor.fetchall():
+                data = dict(row)
+                # Parse files JSON if present
+                if data.get("files"):
+                    try:
+                        data["files"] = json.loads(data["files"])
+                    except json.JSONDecodeError:
+                        data["files"] = None
+                else:
+                    data["files"] = None
+                messages.append(data)
+            return messages
 
     def get_message_count(self, chat_id: str) -> int:
         """Get total count of messages for a chat session"""
@@ -219,7 +258,7 @@ class DatabaseService:
             if chat_id:
                 cursor = conn.execute(
                     """
-                    SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at
+                    SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
                     FROM messages m
                     JOIN messages_meta mm ON m.id = mm.id
                     WHERE mm.chat_id = ? AND m.message MATCH ?
@@ -231,15 +270,28 @@ class DatabaseService:
             else:
                 cursor = conn.execute(
                     """
-                    SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at
+                    SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
                     FROM messages m
+                    JOIN messages_meta mm ON m.id = mm.id
                     WHERE m.message MATCH ?
                     ORDER BY rank
                     LIMIT ?
                     """,
                     (query, limit),
                 )
-            return [dict(row) for row in cursor.fetchall()]
+            messages = []
+            for row in cursor.fetchall():
+                data = dict(row)
+                # Parse files JSON if present
+                if data.get("files"):
+                    try:
+                        data["files"] = json.loads(data["files"])
+                    except json.JSONDecodeError:
+                        data["files"] = None
+                else:
+                    data["files"] = None
+                messages.append(data)
+            return messages
 
     def get_recent_context(self, days: int = 7, limit: int = 20) -> List[Dict]:
         """Get recent messages for context"""
@@ -290,7 +342,7 @@ class DatabaseService:
             # Get recent messages from this session
             cursor = conn.execute(
                 """
-                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at
+                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
                 FROM messages m
                 JOIN messages_meta mm ON m.id = mm.id
                 WHERE mm.chat_id = ? 
@@ -300,7 +352,16 @@ class DatabaseService:
                 (session_id, limit),
             )
             for row in cursor.fetchall():
-                context["recent_messages"].append(dict(row))
+                data = dict(row)
+                # Parse files JSON if present
+                if data.get("files"):
+                    try:
+                        data["files"] = json.loads(data["files"])
+                    except json.JSONDecodeError:
+                        data["files"] = None
+                else:
+                    data["files"] = None
+                context["recent_messages"].append(data)
 
         return context
 
@@ -345,7 +406,7 @@ class DatabaseService:
             # Get recent messages from this session only
             cursor = conn.execute(
                 """
-                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at
+                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
                 FROM messages m
                 JOIN messages_meta mm ON m.id = mm.id
                 WHERE mm.chat_id = ? 
@@ -355,7 +416,16 @@ class DatabaseService:
                 (session_id, limit),
             )
             for row in cursor.fetchall():
-                context["recent_messages"].append(dict(row))
+                data = dict(row)
+                # Parse files JSON if present
+                if data.get("files"):
+                    try:
+                        data["files"] = json.loads(data["files"])
+                    except json.JSONDecodeError:
+                        data["files"] = None
+                else:
+                    data["files"] = None
+                context["recent_messages"].append(data)
 
         return context
 

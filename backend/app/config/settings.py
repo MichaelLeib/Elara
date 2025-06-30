@@ -57,7 +57,7 @@ class Settings:
 
     @property
     def document_timeout(self) -> float:
-        return getattr(self, "_document_timeout", 120.0) or 120.0
+        return getattr(self, "_document_timeout", 600.0) or 600.0
 
     @property
     def message_limit(self) -> int:

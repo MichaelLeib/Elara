@@ -10,6 +10,9 @@ import {
   enterButtonStyle,
 } from "./MessageList.ts";
 import { css } from "@emotion/react";
+import { AnimatedProgressText } from "./DocAnalysisProgress.tsx";
+import { FileList } from "./FileList.tsx";
+import { AnimatedThinking } from "./AnimatedThinking.tsx";
 
 interface MessageListProps extends OriginalMessageListProps {
   onAppendToInput?: (text: string) => void;
@@ -74,8 +77,6 @@ const assistantMessageStyle = css`
 
 const thinkingStyle = css`
   ${assistantMessageStyle}
-  opacity: 0.7;
-  font-style: italic;
 `;
 
 const streamingStyle = css`
@@ -160,6 +161,34 @@ const progressTextStyle = css`
 
   @media (prefers-color-scheme: dark) {
     color: #9ca3af;
+  }
+`;
+
+const lightEffectStyle = css`
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(59, 130, 246, 0.2) 50%,
+    transparent 100%
+  );
+  animation: lightSweep 2s ease-in-out infinite;
+  z-index: 1;
+
+  @keyframes lightSweep {
+    0% {
+      left: -100%;
+    }
+    50% {
+      left: 100%;
+    }
+    100% {
+      left: 100%;
+    }
   }
 `;
 
@@ -298,11 +327,13 @@ export function MessageList({
     // 2. A new message was added AND user hasn't scrolled up
     // 3. Thinking state changed (AI is responding)
     // 4. Streaming state changed
+    // 5. Progress updates (document analysis)
     if (
       isFirstLoad ||
       (isNewMessage && !userHasScrolledUpRef.current) ||
       isThinking ||
-      isStreaming
+      isStreaming ||
+      progress !== null
     ) {
       console.log("🔄 [AUTO-SCROLL] Regular scroll conditions met:", {
         isFirstLoad,
@@ -310,6 +341,7 @@ export function MessageList({
         userHasScrolledUp: userHasScrolledUpRef.current,
         isThinking,
         isStreaming,
+        progress,
       });
       // Small delay to ensure DOM has updated
       const timeoutId = setTimeout(scrollToBottom, 100);
@@ -318,7 +350,7 @@ export function MessageList({
 
     // Update the previous message count
     previousMessageCountRef.current = currentMessageCount;
-  }, [validMessages, isThinking, isStreaming]);
+  }, [validMessages, isThinking, isStreaming, progress]);
 
   // Initial auto-scroll when messages are first loaded
   useEffect(() => {
@@ -552,7 +584,12 @@ export function MessageList({
       // Handle both progress updates and progress clearing
       if (event.detail.progress !== undefined) {
         setProgress(event.detail.progress);
-        setProgressText(event.detail.text || "");
+        // Only set text if it's not null (null means clear the text)
+        if (event.detail.text !== null) {
+          setProgressText(event.detail.text || "");
+        } else {
+          setProgressText("");
+        }
       }
     };
 
@@ -587,13 +624,13 @@ export function MessageList({
 
   // Reset progress and streaming when thinking starts/stops
   useEffect(() => {
-    // Only clear progress when thinking stops AND there's no active progress
-    // This allows progress to continue during document analysis streaming
-    if (!isThinking && progress === null) {
+    // Clear progress when thinking stops (this handles error cases)
+    if (!isThinking) {
       setProgressText("");
       setIsStreaming(false);
+      // Note: progress state is cleared by the event listener when document-analysis-progress event is dispatched with progress: null
     }
-  }, [isThinking, progress]);
+  }, [isThinking]);
 
   return (
     <div
@@ -669,8 +706,8 @@ export function MessageList({
                 {shouldShowThinking ? (
                   <div css={thinkingStyle}>
                     {progress !== null ? (
-                      <div>
-                        <div>Document Analysis in Progress</div>
+                      <div style={{ position: "relative", overflow: "hidden" }}>
+                        <div>Document Analysis in Progress...</div>
                         <div css={progressBarContainerStyle}>
                           <div
                             css={progressBarStyle}
@@ -678,17 +715,22 @@ export function MessageList({
                           />
                         </div>
                         {progressText && (
-                          <div css={progressTextStyle}>{progressText}</div>
+                          <AnimatedProgressText
+                            key={progressText}
+                            text={progressText}
+                          />
                         )}
                         <div css={progressTextStyle}>{progress}% complete</div>
+                        <div css={lightEffectStyle} />
                       </div>
                     ) : (
-                      "Thinking..."
+                      <AnimatedThinking />
                     )}
                   </div>
                 ) : typeof msg.message === "string" ? (
                   <>
                     {formatMessage(msg.message)}
+                    {msg.files && <FileList files={msg.files} />}
                     {shouldShowProgress && (
                       <div
                         css={css`
@@ -697,6 +739,9 @@ export function MessageList({
                           background: rgba(59, 130, 246, 0.1);
                           border-radius: 0.5rem;
                           border: 1px solid rgba(59, 130, 246, 0.2);
+                          height: 100%;
+                          position: relative;
+                          overflow: hidden;
                         `}
                       >
                         <div>Document Analysis in Progress</div>
@@ -707,9 +752,13 @@ export function MessageList({
                           />
                         </div>
                         {progressText && (
-                          <div css={progressTextStyle}>{progressText}</div>
+                          <AnimatedProgressText
+                            key={progressText}
+                            text={progressText}
+                          />
                         )}
                         <div css={progressTextStyle}>{progress}% complete</div>
+                        <div css={lightEffectStyle} />
                       </div>
                     )}
                     {msg.user_id === "user" && onAppendToInput && (

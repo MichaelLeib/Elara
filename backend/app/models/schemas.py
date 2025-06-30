@@ -3,6 +3,13 @@ from typing import List, Optional
 from datetime import datetime
 
 
+class FileInfo(BaseModel):
+    filename: str
+    size: Optional[int] = None
+    type: Optional[str] = None
+    content: Optional[str] = None  # For document analysis, the actual content
+
+
 class ChatRequest(BaseModel):
     message: str
     model: str
@@ -63,6 +70,7 @@ class ChatMessageRequest(BaseModel):
     message: str
     user_id: str
     model: str
+    files: Optional[List[FileInfo]] = None
 
 
 class ChatSnippet(BaseModel):
@@ -70,6 +78,7 @@ class ChatSnippet(BaseModel):
     user_id: str
     message: str
     model: str
+    files: Optional[List[FileInfo]] = None
     created_at: datetime
     updated_at: datetime
 

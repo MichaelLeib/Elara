@@ -87,9 +87,9 @@ CRITICAL: Respond with ONLY the JSON object. No other text."""
                     len(assistant_message) > 1000
                     or "Document Analysis Request:" in user_message
                 ):
-                    timeout = 60.0  # Longer timeout for document analysis
+                    timeout = 180.0  # Much longer timeout for document analysis
                     print(
-                        f"[SummarizationService] Using longer timeout (60s) for document analysis summary (message_len={len(assistant_message)})"
+                        f"[SummarizationService] Using longer timeout (180s) for document analysis summary (message_len={len(assistant_message)})"
                     )
                 else:
                     timeout = 30.0  # Default timeout for regular conversations

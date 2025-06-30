@@ -27,7 +27,8 @@ export async function sendMessageWebSocket(
     chunk: string,
     done: boolean,
     error?: string,
-    progress?: number
+    progress?: number,
+    clear?: boolean
   ) => void
 ): Promise<void> {
   console.log("Sending message to WebSocket:", {
@@ -134,6 +135,14 @@ export async function sendMessageWebSocket(
             }
           );
           onChunk?.(data.content, false, undefined, data.progress);
+        } else if (data.type === "clear_progress") {
+          // Handle clear progress signal - clear any progress messages and start fresh
+          console.log("🔄 [WEBSOCKET] Clear progress signal received:", {
+            progress: data.progress,
+            done: data.done,
+          });
+          // Send empty content to clear the message, but with a special flag
+          onChunk?.("", false, undefined, data.progress, true); // Added clear flag
         } else if (data.type === "status") {
           // Handle status updates (e.g., "Analyzing documents...")
           console.log("🔄 [WEBSOCKET] Status update:", {
