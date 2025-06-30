@@ -21,6 +21,7 @@ from app.services.summarization_service import summarization_service
 from app.services.context_service import context_service
 from app.services.document_service import document_service
 from app.services.websocket_document_handler import WebSocketDocumentHandler
+from app.services.user_info_extractor import user_info_extractor
 from app.config.settings import settings
 from app.services.database_service import database_service
 
@@ -59,6 +60,34 @@ async def websocket_endpoint(websocket: WebSocket):
                 files = None
 
             try:
+                # Extract user information from the message (for public chats only)
+                user_info_result = None
+                if not is_private and message.strip():
+                    try:
+                        user_info_result = (
+                            await user_info_extractor.process_and_save_user_info(
+                                user_message=message, model=model
+                            )
+                        )
+                        print(
+                            f"User info extraction: {user_info_result.get('total_saved', 0)} items saved"
+                        )
+
+                        # Send memory update notification if items were saved
+                        if user_info_result.get("total_saved", 0) > 0:
+                            saved_items = user_info_result.get("saved_entries", [])
+                            memory_notification = {
+                                "type": "memory_updated",
+                                "content": f"Memory updated with {user_info_result.get('total_saved', 0)} new items",
+                                "saved_items": saved_items,
+                                "total_saved": user_info_result.get("total_saved", 0),
+                            }
+                            await websocket.send_text(json.dumps(memory_notification))
+
+                    except Exception as extraction_error:
+                        print(f"User info extraction failed: {extraction_error}")
+                        # Continue with chat even if extraction fails
+
                 # Handle document analysis if files are provided
                 if files and isinstance(files, list) and len(files) > 0:
                     # Use the new WebSocket document handler
@@ -288,6 +317,20 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
 
         is_private = session.get("is_private", True)
 
+        # Extract user information from the message (for public chats only)
+        user_info_result = None
+        if not is_private and request.message.strip():
+            try:
+                user_info_result = await user_info_extractor.process_and_save_user_info(
+                    user_message=request.message, model=request.model
+                )
+                print(
+                    f"User info extraction: {user_info_result.get('total_saved', 0)} items saved"
+                )
+            except Exception as extraction_error:
+                print(f"User info extraction failed: {extraction_error}")
+                # Continue with chat even if extraction fails
+
         # Convert FileInfo objects to dict for database storage
         files_data = None
         if request.files:
@@ -354,6 +397,7 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
             "summary": summary_data,
             "summary_id": summary_id,
             "is_private": is_private,
+            "user_info_extraction": user_info_result,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")

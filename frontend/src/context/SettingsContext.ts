@@ -8,6 +8,7 @@ export interface Settings {
   OLLAMA_MODEL: string;
   manual_model_switch: boolean;
   summarization_prompt: string;
+  user_info_extraction_model: string; // "adaptive", "fast", "quality"
 }
 
 interface SettingsContextType {

@@ -13,6 +13,7 @@ import { css } from "@emotion/react";
 import { AnimatedProgressText } from "./DocAnalysisProgress.tsx";
 import { FileList } from "./FileList.tsx";
 import { AnimatedThinking } from "./AnimatedThinking.tsx";
+import { MemoryNotification } from "./MemoryNotification.tsx";
 
 interface MessageListProps extends OriginalMessageListProps {
   onAppendToInput?: (text: string) => void;
@@ -210,6 +211,20 @@ export function MessageList({
   const [progress, setProgress] = useState<number | null>(null);
   const [progressText, setProgressText] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [memoryNotification, setMemoryNotification] = useState<{
+    isVisible: boolean;
+    message: string;
+    savedItems: Array<{
+      key: string;
+      value: string;
+      action: string;
+      reason: string;
+    }>;
+  }>({
+    isVisible: false,
+    message: "",
+    savedItems: [],
+  });
   const isAutoScrollingRef = useRef(false);
 
   // Filter out any invalid messages
@@ -632,198 +647,258 @@ export function MessageList({
     }
   }, [isThinking]);
 
+  // Handle streaming state updates
+  useEffect(() => {
+    const handleStreamingUpdate = (event: CustomEvent) => {
+      setIsStreaming(event.detail.isStreaming);
+    };
+
+    window.addEventListener(
+      "message-streaming",
+      handleStreamingUpdate as EventListener
+    );
+    return () => {
+      window.removeEventListener(
+        "message-streaming",
+        handleStreamingUpdate as EventListener
+      );
+    };
+  }, []);
+
+  // Handle memory update notifications
+  useEffect(() => {
+    const handleMemoryUpdate = (event: CustomEvent) => {
+      const { content, saved_items } = event.detail;
+      setMemoryNotification({
+        isVisible: true,
+        message: content,
+        savedItems: saved_items || [],
+      });
+    };
+
+    window.addEventListener(
+      "memory-updated",
+      handleMemoryUpdate as EventListener
+    );
+    return () => {
+      window.removeEventListener(
+        "memory-updated",
+        handleMemoryUpdate as EventListener
+      );
+    };
+  }, []);
+
+  const handleMemoryNotificationClose = () => {
+    setMemoryNotification((prev) => ({ ...prev, isVisible: false }));
+  };
+
   return (
-    <div
-      css={messageListStyle}
-      ref={containerRef}
-    >
-      {hasMore && (
-        <button
-          css={loadMoreButtonStyle}
-          onClick={onLoadMore}
-          disabled={isLoadingMore}
-        >
-          {isLoadingMore ? "Loading..." : "Load More Messages"}
-        </button>
-      )}
-
-      {validMessages.length > 0 ? (
-        validMessages.map((msg, index) => {
-          const isLastMessage = index === validMessages.length - 1;
-          const isAssistantMessage = msg.user_id === "assistant";
-          const isEmptyMessage = msg.message === "";
-          const shouldShowThinking =
-            isEmptyMessage && isThinking && isLastMessage;
-          const shouldShowStreaming =
-            isAssistantMessage &&
-            isStreaming &&
-            isLastMessage &&
-            !isEmptyMessage;
-          const shouldShowProgress =
-            isAssistantMessage && isLastMessage && progress !== null;
-
-          // Debug logging for progress display
-          if (isLastMessage && isAssistantMessage) {
-            console.log("🔄 [MESSAGELIST] Progress display debug:", {
-              isLastMessage,
-              isAssistantMessage,
-              isEmptyMessage,
-              isThinking,
-              progress,
-              shouldShowThinking,
-              shouldShowProgress,
-              messageLength: msg.message?.length || 0,
-            });
-          }
-
-          return (
-            <div
-              key={index}
-              css={
-                msg.user_id === "user"
-                  ? userMessageStyle
-                  : shouldShowStreaming
-                  ? streamingStyle
-                  : assistantMessageStyle
-              }
-            >
-              <div css={messageTimestampStyle()}>
-                {dayjs(msg.created_at).format("ddd, MMM D • HH:mm")}
-              </div>
-              {msg.user_id === "assistant" && (
-                <div css={messageModelStyle()}>
-                  {typeof msg.model === "string"
-                    ? msg.model
-                    : typeof msg.model === "object" && msg.model
-                    ? msg.model.name || "[Unknown Model]"
-                    : "[Invalid model]"}
-                </div>
-              )}
-              <div
-                css={messageBubbleStyle(msg.user_id === "user")}
-                style={{ position: "relative" }}
-              >
-                {shouldShowThinking ? (
-                  <div css={thinkingStyle}>
-                    {progress !== null ? (
-                      <div style={{ position: "relative", overflow: "hidden" }}>
-                        <div>Document Analysis in Progress...</div>
-                        <div css={progressBarContainerStyle}>
-                          <div
-                            css={progressBarStyle}
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                        {progressText && (
-                          <AnimatedProgressText
-                            key={progressText}
-                            text={progressText}
-                          />
-                        )}
-                        <div css={progressTextStyle}>{progress}% complete</div>
-                        <div css={lightEffectStyle} />
-                      </div>
-                    ) : (
-                      <AnimatedThinking />
-                    )}
-                  </div>
-                ) : typeof msg.message === "string" ? (
-                  <>
-                    {formatMessage(msg.message)}
-                    {msg.files && <FileList files={msg.files} />}
-                    {shouldShowProgress && (
-                      <div
-                        css={css`
-                          margin-top: 1rem;
-                          padding: 0.75rem;
-                          background: rgba(59, 130, 246, 0.1);
-                          border-radius: 0.5rem;
-                          border: 1px solid rgba(59, 130, 246, 0.2);
-                          height: 100%;
-                          position: relative;
-                          overflow: hidden;
-                        `}
-                      >
-                        <div>Document Analysis in Progress</div>
-                        <div css={progressBarContainerStyle}>
-                          <div
-                            css={progressBarStyle}
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                        {progressText && (
-                          <AnimatedProgressText
-                            key={progressText}
-                            text={progressText}
-                          />
-                        )}
-                        <div css={progressTextStyle}>{progress}% complete</div>
-                        <div css={lightEffectStyle} />
-                      </div>
-                    )}
-                    {msg.user_id === "user" && onAppendToInput && (
-                      <button
-                        css={enterButtonStyle}
-                        title="Copy to input"
-                        onClick={() => onAppendToInput(msg.message)}
-                      >
-                        <FaArrowDown size={8} />
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  "[Invalid message object]"
-                )}
-              </div>
-            </div>
-          );
-        })
-      ) : (
-        <div css={assistantMessageStyle}>
-          <p>
-            Welcome to Elara! I'm here to help you with your questions and
-            document analysis.
-          </p>
-          <p>
-            <strong>Features:</strong>
-          </p>
-          <ul>
-            <li>💬 Chat with AI about any topic</li>
-            <li>📄 Upload and analyze documents (DOCX, PDF, TXT, etc.)</li>
-            <li>🔒 Private chat sessions for sensitive conversations</li>
-            <li>📚 Access to conversation history and summaries</li>
-          </ul>
-          <p>
-            <strong>Privacy:</strong> This is currently a{" "}
-            {isPrivate ? "private" : "public"} chat session.
-            {!isPrivate && (
-              <span>
-                Elara will automatically create memories of important
-                information you share. You can always edit/delete them in the
-                memories tab in the settings.
-              </span>
-            )}
-          </p>
+    <>
+      <div
+        css={messageListStyle}
+        ref={containerRef}
+      >
+        {hasMore && (
           <button
-            css={css`
-              background: #3b82f6;
-              color: white;
-              border: none;
-              padding: 0.5rem 1rem;
-              border-radius: 0.5rem;
-              cursor: pointer;
-              margin-top: 0.5rem;
-
-              &:hover {
-                background: #2563eb;
-              }
-            `}
+            css={loadMoreButtonStyle}
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
           >
-            Start New Chat
+            {isLoadingMore ? "Loading..." : "Load More Messages"}
           </button>
-        </div>
-      )}
-    </div>
+        )}
+
+        {validMessages.length > 0 ? (
+          validMessages.map((msg, index) => {
+            const isLastMessage = index === validMessages.length - 1;
+            const isAssistantMessage = msg.user_id === "assistant";
+            const isEmptyMessage = msg.message === "";
+            const shouldShowThinking =
+              isEmptyMessage && isThinking && isLastMessage;
+            const shouldShowStreaming =
+              isAssistantMessage &&
+              isStreaming &&
+              isLastMessage &&
+              !isEmptyMessage;
+            const shouldShowProgress =
+              isAssistantMessage && isLastMessage && progress !== null;
+
+            // Debug logging for progress display
+            if (isLastMessage && isAssistantMessage) {
+              console.log("🔄 [MESSAGELIST] Progress display debug:", {
+                isLastMessage,
+                isAssistantMessage,
+                isEmptyMessage,
+                isThinking,
+                progress,
+                shouldShowThinking,
+                shouldShowProgress,
+                messageLength: msg.message?.length || 0,
+              });
+            }
+
+            return (
+              <div
+                key={index}
+                css={
+                  msg.user_id === "user"
+                    ? userMessageStyle
+                    : shouldShowStreaming
+                    ? streamingStyle
+                    : assistantMessageStyle
+                }
+              >
+                <div css={messageTimestampStyle()}>
+                  {dayjs(msg.created_at).format("ddd, MMM D • HH:mm")}
+                </div>
+                {msg.user_id === "assistant" && (
+                  <div css={messageModelStyle()}>
+                    {typeof msg.model === "string"
+                      ? msg.model
+                      : typeof msg.model === "object" && msg.model
+                      ? msg.model.name || "[Unknown Model]"
+                      : "[Invalid model]"}
+                  </div>
+                )}
+                <div
+                  css={messageBubbleStyle(msg.user_id === "user")}
+                  style={{ position: "relative" }}
+                >
+                  {shouldShowThinking ? (
+                    <div css={thinkingStyle}>
+                      {progress !== null ? (
+                        <div
+                          style={{ position: "relative", overflow: "hidden" }}
+                        >
+                          <div>Document Analysis in Progress...</div>
+                          <div css={progressBarContainerStyle}>
+                            <div
+                              css={progressBarStyle}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          {progressText && (
+                            <AnimatedProgressText
+                              key={progressText}
+                              text={progressText}
+                            />
+                          )}
+                          <div css={progressTextStyle}>
+                            {progress}% complete
+                          </div>
+                          <div css={lightEffectStyle} />
+                        </div>
+                      ) : (
+                        <AnimatedThinking />
+                      )}
+                    </div>
+                  ) : typeof msg.message === "string" ? (
+                    <>
+                      {formatMessage(msg.message)}
+                      {msg.files && <FileList files={msg.files} />}
+                      {shouldShowProgress && (
+                        <div
+                          css={css`
+                            margin-top: 1rem;
+                            padding: 0.75rem;
+                            background: rgba(59, 130, 246, 0.1);
+                            border-radius: 0.5rem;
+                            border: 1px solid rgba(59, 130, 246, 0.2);
+                            height: 100%;
+                            position: relative;
+                            overflow: hidden;
+                          `}
+                        >
+                          <div>Document Analysis in Progress</div>
+                          <div css={progressBarContainerStyle}>
+                            <div
+                              css={progressBarStyle}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          {progressText && (
+                            <AnimatedProgressText
+                              key={progressText}
+                              text={progressText}
+                            />
+                          )}
+                          <div css={progressTextStyle}>
+                            {progress}% complete
+                          </div>
+                          <div css={lightEffectStyle} />
+                        </div>
+                      )}
+                      {msg.user_id === "user" && onAppendToInput && (
+                        <button
+                          css={enterButtonStyle}
+                          title="Copy to input"
+                          onClick={() => onAppendToInput(msg.message)}
+                        >
+                          <FaArrowDown size={8} />
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    "[Invalid message object]"
+                  )}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div css={assistantMessageStyle}>
+            <p>
+              Welcome to Elara! I'm here to help you with your questions and
+              document analysis.
+            </p>
+            <p>
+              <strong>Features:</strong>
+            </p>
+            <ul>
+              <li>💬 Chat with AI about any topic</li>
+              <li>📄 Upload and analyze documents (DOCX, PDF, TXT, etc.)</li>
+              <li>🔒 Private chat sessions for sensitive conversations</li>
+              <li>📚 Access to conversation history and summaries</li>
+            </ul>
+            <p>
+              <strong>Privacy:</strong> This is currently a{" "}
+              {isPrivate ? "private" : "public"} chat session.
+              {!isPrivate && (
+                <span>
+                  Elara will automatically create memories of important
+                  information you share. You can always edit/delete them in the
+                  memories tab in the settings.
+                </span>
+              )}
+            </p>
+            <button
+              css={css`
+                background: #3b82f6;
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 0.5rem;
+                cursor: pointer;
+                margin-top: 0.5rem;
+
+                &:hover {
+                  background: #2563eb;
+                }
+              `}
+            >
+              Start New Chat
+            </button>
+          </div>
+        )}
+      </div>
+
+      <MemoryNotification
+        isVisible={memoryNotification.isVisible}
+        message={memoryNotification.message}
+        savedItems={memoryNotification.savedItems}
+        onClose={handleMemoryNotificationClose}
+      />
+    </>
   );
 }
 //endregion

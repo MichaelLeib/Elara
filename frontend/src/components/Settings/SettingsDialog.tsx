@@ -558,6 +558,8 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const [summarizationPrompt, setSummarizationPrompt] = useState<string>(
     settings?.summarization_prompt ?? ""
   );
+  const [userInfoExtractionModel, setUserInfoExtractionModel] =
+    useState<string>(settings?.user_info_extraction_model ?? "adaptive");
   const [settingsSaved, setSettingsSaved] = useState(false);
 
   useEffect(() => {
@@ -574,6 +576,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
       setMessageOffset(settings.message_offset);
       setManualModelSwitch(settings.manual_model_switch);
       setSummarizationPrompt(settings.summarization_prompt);
+      setUserInfoExtractionModel(settings.user_info_extraction_model);
     }
   }, [settings]);
 
@@ -604,6 +607,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
         message_offset: messageOffset,
         manual_model_switch: manualModelSwitch,
         summarization_prompt: summarizationPrompt,
+        user_info_extraction_model: userInfoExtractionModel,
       });
       setSettingsSaved(true);
       await reloadSettings();
@@ -1034,6 +1038,33 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       {manualModelSwitch ? "Enabled" : "Disabled"}
                     </label>
                   </div>
+                </div>
+
+                <div css={modelSettingsRowStyle}>
+                  <label css={modelSettingsLabelStyle}>
+                    User Info Extraction Model
+                  </label>
+                  <div css={modelSettingsDescriptionStyle}>
+                    Choose how the AI extracts user information from messages:
+                    <br />
+                    <strong>Adaptive</strong>: Automatically chooses between
+                    fast and quality models based on message complexity
+                    <br />
+                    <strong>Fast</strong>: Always uses phi3:mini for speed
+                    <br />
+                    <strong>Quality</strong>: Always uses the same model as chat
+                    for better accuracy
+                  </div>
+                  <select
+                    value={userInfoExtractionModel}
+                    onChange={(e) => setUserInfoExtractionModel(e.target.value)}
+                    disabled={settingsLoading}
+                    css={modelSettingsInputStyle}
+                  >
+                    <option value="adaptive">Adaptive (Recommended)</option>
+                    <option value="fast">Fast (phi3:mini)</option>
+                    <option value="quality">Quality (Chat Model)</option>
+                  </select>
                 </div>
 
                 <div css={modelSettingsRowStyle}>

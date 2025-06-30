@@ -151,6 +151,23 @@ export async function sendMessageWebSocket(
             contentLength: data.content?.length || 0,
           });
           onChunk?.(data.content, false, undefined, data.progress);
+        } else if (data.type === "memory_updated") {
+          // Handle memory update notifications
+          console.log("🧠 [WEBSOCKET] Memory updated:", {
+            content: data.content,
+            saved_items: data.saved_items,
+            total_saved: data.total_saved,
+          });
+          // Dispatch a custom event for the UI to listen to
+          window.dispatchEvent(
+            new CustomEvent("memory-updated", {
+              detail: {
+                content: data.content,
+                saved_items: data.saved_items,
+                total_saved: data.total_saved,
+              },
+            })
+          );
         } else {
           // Fallback for non-streaming responses
           onChunk?.(event.data, true);
