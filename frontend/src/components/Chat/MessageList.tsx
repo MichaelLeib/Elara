@@ -4,18 +4,28 @@ import type { MessageListProps as OriginalMessageListProps } from "./models";
 import dayjs from "dayjs";
 import { FaArrowDown, FaStop } from "react-icons/fa";
 import {
-  messageBubbleStyle,
+  messageListStyle,
+  userMessageStyle,
+  streamingStyle,
+  loadMoreButtonStyle,
+  progressBarContainerStyle,
+  progressBarStyle,
+  progressTextStyle,
+  lightEffectStyle,
+  stopButtonStyle,
+  assistantMessageStyle,
   messageTimestampStyle,
   messageModelStyle,
+  messageBubbleStyle,
+  thinkingStyle,
   enterButtonStyle,
-} from "./MessageList.ts";
+} from "./MessageListStyles.ts";
 import { css } from "@emotion/react";
 import { AnimatedProgressText } from "./DocAnalysisProgress.tsx";
 import { FileList } from "./FileList.tsx";
 import { AnimatedThinking } from "./AnimatedThinking.tsx";
 import { MemoryNotification } from "./MemoryNotification.tsx";
 import SourcePills from "../UI/SourcePills";
-import WebSearchAnimation from "./WebSearchAnimation";
 
 interface MessageListProps extends OriginalMessageListProps {
   onAppendToInput?: (text: string) => void;
@@ -46,189 +56,6 @@ const formatMessage = (message: string) => {
       .trim()
   );
 };
-
-const messageListStyle = css`
-  flex: 1;
-  overflow-y: auto;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-height: 0;
-  height: 100%;
-`;
-
-const messageStyle = css`
-  padding: 1rem;
-  border-radius: 0.75rem;
-  max-width: 80%;
-  word-wrap: break-word;
-  white-space: pre-wrap;
-`;
-
-const userMessageStyle = css`
-  ${messageStyle}
-  align-self: flex-end;
-  margin-left: auto;
-`;
-
-const assistantMessageStyle = css`
-  ${messageStyle}
-  align-self: flex-start;
-  margin-right: auto;
-`;
-
-const thinkingStyle = css`
-  ${assistantMessageStyle}
-`;
-
-const streamingStyle = css`
-  ${assistantMessageStyle}
-  position: relative;
-
-  &::after {
-    content: "";
-    position: absolute;
-    bottom: 0.5rem;
-    right: 0.5rem;
-    width: 8px;
-    height: 8px;
-    background: #3b82f6;
-    border-radius: 50%;
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.3;
-    }
-  }
-`;
-
-const loadMoreButtonStyle = css`
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  align-self: center;
-  margin: 1rem 0;
-
-  &:hover {
-    background: #2563eb;
-  }
-
-  &:disabled {
-    background: #9ca3af;
-    cursor: not-allowed;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    background: #1d4ed8;
-
-    &:hover {
-      background: #1e40af;
-    }
-  }
-`;
-
-const progressBarContainerStyle = css`
-  width: 100%;
-  background: #e5e7eb;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  margin: 0.5rem 0;
-
-  @media (prefers-color-scheme: dark) {
-    background: #374151;
-  }
-`;
-
-const progressBarStyle = css`
-  height: 4px;
-  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-  transition: width 0.3s ease;
-  border-radius: 0.5rem;
-`;
-
-const progressTextStyle = css`
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-top: 0.25rem;
-  text-align: center;
-
-  @media (prefers-color-scheme: dark) {
-    color: #9ca3af;
-  }
-`;
-
-const lightEffectStyle = css`
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(59, 130, 246, 0.2) 50%,
-    transparent 100%
-  );
-  animation: lightSweep 2s ease-in-out infinite;
-  z-index: 1;
-
-  @keyframes lightSweep {
-    0% {
-      left: -100%;
-    }
-    50% {
-      left: 100%;
-    }
-    100% {
-      left: 100%;
-    }
-  }
-`;
-
-const stopButtonStyle = css`
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
-  border-radius: 0.375rem;
-  padding: 0.5rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.875rem;
-  font-weight: 500;
-  z-index: 1000;
-
-  &:hover {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.5);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.4);
-    color: #f87171;
-
-    &:hover {
-      background: rgba(239, 68, 68, 0.3);
-      border-color: rgba(239, 68, 68, 0.6);
-    }
-  }
-`;
 
 export function MessageList({
   messages,
@@ -300,9 +127,6 @@ export function MessageList({
     const handleScroll = () => {
       // Ignore scroll events when auto-scroll is active
       if (isAutoScrollingRef.current) {
-        console.log(
-          "🔄 [SCROLL-STATE] Ignoring scroll event - auto-scroll active"
-        );
         return;
       }
 
@@ -310,20 +134,7 @@ export function MessageList({
 
       // Check if user has scrolled up (not at bottom)
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10; // 10px threshold
-      const wasScrolledUp = userHasScrolledUpRef.current;
       userHasScrolledUpRef.current = !isAtBottom;
-
-      // Log scroll state changes
-      if (wasScrolledUp !== userHasScrolledUpRef.current) {
-        console.log("🔄 [SCROLL-STATE] User scroll state changed:", {
-          wasScrolledUp,
-          isNowScrolledUp: userHasScrolledUpRef.current,
-          scrollTop,
-          scrollHeight,
-          clientHeight,
-          isAtBottom,
-        });
-      }
 
       // Load more messages when scrolling to top (with debouncing)
       if (scrollTop < 100 && hasMore && !isLoadingMore && onLoadMore) {
@@ -376,7 +187,6 @@ export function MessageList({
   useEffect(() => {
     const scrollToBottom = () => {
       if (containerRef.current) {
-        console.log("🔄 [AUTO-SCROLL] Regular scroll triggered");
         isAutoScrollingRef.current = true;
         containerRef.current.scrollTo({
           top: containerRef.current.scrollHeight,
@@ -406,14 +216,6 @@ export function MessageList({
       isStreaming ||
       progress !== null
     ) {
-      console.log("🔄 [AUTO-SCROLL] Regular scroll conditions met:", {
-        isFirstLoad,
-        isNewMessage,
-        userHasScrolledUp: userHasScrolledUpRef.current,
-        isThinking,
-        isStreaming,
-        progress,
-      });
       // Small delay to ensure DOM has updated
       const timeoutId = setTimeout(scrollToBottom, 100);
       return () => clearTimeout(timeoutId);
@@ -425,19 +227,9 @@ export function MessageList({
 
   // Initial auto-scroll when messages are first loaded
   useEffect(() => {
-    console.log("🔄 [INITIAL-SCROLL] Effect triggered:", {
-      validMessagesLength: validMessages.length,
-      hasInitialScroll: hasInitialScrollRef.current,
-      containerExists: !!containerRef.current,
-    });
-
     if (validMessages.length > 0 && !hasInitialScrollRef.current) {
-      console.log(
-        "🔄 [INITIAL-SCROLL] Initial messages loaded, scrolling to bottom"
-      );
       const scrollToBottom = () => {
         if (containerRef.current) {
-          console.log("🔄 [INITIAL-SCROLL] Executing scroll to bottom");
           isAutoScrollingRef.current = true;
           containerRef.current.scrollTo({
             top: containerRef.current.scrollHeight,
@@ -447,10 +239,6 @@ export function MessageList({
           setTimeout(() => {
             isAutoScrollingRef.current = false;
           }, 100);
-        } else {
-          console.log(
-            "🔄 [INITIAL-SCROLL] Container ref is null, cannot scroll"
-          );
         }
       };
 
@@ -458,30 +246,14 @@ export function MessageList({
       const timeoutId = setTimeout(() => {
         scrollToBottom();
         hasInitialScrollRef.current = true; // Mark that we've done the initial scroll
-        console.log(
-          "🔄 [INITIAL-SCROLL] Initial scroll completed, flag set to true"
-        );
       }, 150);
       return () => clearTimeout(timeoutId);
-    } else {
-      console.log("🔄 [INITIAL-SCROLL] Conditions not met:", {
-        hasMessages: validMessages.length > 0,
-        hasInitialScroll: hasInitialScrollRef.current,
-      });
     }
   }, [validMessages.length]);
 
   // Reset initial scroll flag when messages are cleared (e.g., switching chat sessions)
   useEffect(() => {
-    console.log("🔄 [INITIAL-SCROLL] Reset effect triggered:", {
-      validMessagesLength: validMessages.length,
-      hasInitialScroll: hasInitialScrollRef.current,
-    });
-
     if (validMessages.length === 0) {
-      console.log(
-        "🔄 [INITIAL-SCROLL] Messages cleared, resetting initial scroll flag"
-      );
       hasInitialScrollRef.current = false;
     }
   }, [validMessages.length]);
@@ -501,7 +273,6 @@ export function MessageList({
     if (lastMessage && lastMessage.user_id === "assistant") {
       // Force scroll when assistant message content changes during streaming
       if (!userHasScrolledUpRef.current) {
-        console.log("🔄 [AUTO-SCROLL] Message content change scroll triggered");
         isAutoScrollingRef.current = true;
         containerRef.current.scrollTo({
           top: containerRef.current.scrollHeight,
@@ -518,7 +289,6 @@ export function MessageList({
   // Force scroll when streaming starts
   useEffect(() => {
     if (isStreaming && containerRef.current && !userHasScrolledUpRef.current) {
-      console.log("🔄 [AUTO-SCROLL] Streaming start scroll triggered");
       // Immediate scroll when streaming starts
       isAutoScrollingRef.current = true;
       containerRef.current.scrollTo({
@@ -534,19 +304,9 @@ export function MessageList({
 
   // Auto-scroll during streaming to keep growing message visible
   useEffect(() => {
-    console.log("🔄 [STREAMING-EFFECT] Effect triggered with dependencies:", {
-      isStreaming,
-      messagesLength: validMessages.length,
-    });
-
     if (!isStreaming || !containerRef.current) {
-      console.log(
-        "🔄 [STREAMING-EFFECT] Early return - not streaming or no container"
-      );
       return;
     }
-
-    console.log("🔄 [STREAMING-SCROLL] Setting up streaming scroll");
 
     let scrollInterval: ReturnType<typeof setInterval> | null = null;
     let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -554,7 +314,6 @@ export function MessageList({
 
     const scrollToKeepVisible = () => {
       if (containerRef.current && !userHasScrolledUpRef.current) {
-        console.log("🔄 [STREAMING-SCROLL] Interval scroll triggered");
         // Use requestAnimationFrame for smoother scrolling
         if (animationFrameId) {
           cancelAnimationFrame(animationFrameId);
@@ -571,11 +330,6 @@ export function MessageList({
               isAutoScrollingRef.current = false;
             }, 100);
           }
-        });
-      } else {
-        console.log("🔄 [STREAMING-SCROLL] Scroll blocked:", {
-          hasContainer: !!containerRef.current,
-          userHasScrolledUp: userHasScrolledUpRef.current,
         });
       }
     };
@@ -626,11 +380,9 @@ export function MessageList({
         attributes: true,
         attributeFilter: ["textContent"],
       });
-      console.log("🔄 [STREAMING-SCROLL] MutationObserver set up");
     }
 
     return () => {
-      console.log("🔄 [STREAMING-SCROLL] Cleaning up streaming scroll");
       mutationObserver.disconnect();
       if (scrollInterval) {
         clearInterval(scrollInterval);
@@ -647,11 +399,6 @@ export function MessageList({
   // Listen for progress updates from the parent component
   useEffect(() => {
     const handleProgressUpdate = (event: CustomEvent) => {
-      console.log("🔄 [PROGRESS] Progress update received:", {
-        progress: event.detail.progress,
-        text: event.detail.text,
-      });
-
       // Handle both progress updates and progress clearing
       if (event.detail.progress !== undefined) {
         // Ignore keepalive messages (progress=1) to avoid interfering with real progress
@@ -659,7 +406,6 @@ export function MessageList({
           event.detail.progress === 1 &&
           event.detail.text?.includes("Processing... (")
         ) {
-          console.log("🔄 [PROGRESS] Ignoring keepalive message");
           return;
         }
 
@@ -679,10 +425,6 @@ export function MessageList({
     };
 
     const handleStreamingUpdate = (event: CustomEvent) => {
-      console.log("🔄 [STREAMING-STATE] Streaming state changed:", {
-        isStreaming: event.detail.isStreaming,
-        text: event.detail.text,
-      });
       setIsStreaming(event.detail.isStreaming);
     };
 
@@ -789,6 +531,11 @@ export function MessageList({
     };
   }, []);
 
+  // Debug web search status changes
+  useEffect(() => {
+    console.log("🔍 [MESSAGELIST] Web search status changed:", webSearchStatus);
+  }, [webSearchStatus]);
+
   const handleMemoryNotificationClose = () => {
     setMemoryNotification((prev) => ({ ...prev, isVisible: false }));
   };
@@ -832,18 +579,14 @@ export function MessageList({
 
         {validMessages.length > 0 ? (
           <>
-            {webSearchStatus.isSearching && (
-              <WebSearchAnimation
-                searchTerms={webSearchStatus.searchTerms}
-                css={assistantMessageStyle}
-              />
-            )}
             {validMessages.map((msg, index) => {
               const isLastMessage = index === validMessages.length - 1;
               const isAssistantMessage = msg.user_id === "assistant";
               const isEmptyMessage = msg.message === "";
               const shouldShowThinking =
                 isEmptyMessage && isThinking && isLastMessage;
+              const shouldShowSearching =
+                webSearchStatus.isSearching && isThinking && isLastMessage;
               const shouldShowStreaming =
                 isAssistantMessage &&
                 isStreaming &&
@@ -879,7 +622,7 @@ export function MessageList({
                     css={messageBubbleStyle(msg.user_id === "user")}
                     style={{ position: "relative" }}
                   >
-                    {shouldShowThinking ? (
+                    {shouldShowThinking || shouldShowSearching ? (
                       <div css={thinkingStyle}>
                         {progress !== null ? (
                           <div
@@ -943,7 +686,14 @@ export function MessageList({
                             </button>
                           </div>
                         ) : (
-                          <AnimatedThinking />
+                          <AnimatedThinking
+                            mode={
+                              webSearchStatus.isSearching
+                                ? "searching"
+                                : "thinking"
+                            }
+                            searchTerms={webSearchStatus.searchTerms}
+                          />
                         )}
                       </div>
                     ) : typeof msg.message === "string" ? (

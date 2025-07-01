@@ -139,26 +139,30 @@ class DatabaseService:
         session_id: str,
         title: Optional[str] = None,
         metadata: Optional[Dict] = None,
+        model: Optional[str] = None,
     ) -> bool:
         """Update chat session"""
         with self._get_connection() as conn:
-            if title and metadata:
-                conn.execute(
-                    "UPDATE chat_sessions SET title = ?, metadata = ? WHERE id = ?",
-                    (title, json.dumps(metadata), session_id),
-                )
-            elif title:
-                conn.execute(
-                    "UPDATE chat_sessions SET title = ? WHERE id = ?",
-                    (title, session_id),
-                )
-            elif metadata:
-                conn.execute(
-                    "UPDATE chat_sessions SET metadata = ? WHERE id = ?",
-                    (json.dumps(metadata), session_id),
-                )
-            conn.commit()
-            return conn.total_changes > 0
+            updates = []
+            params = []
+
+            if title:
+                updates.append("title = ?")
+                params.append(title)
+            if metadata:
+                updates.append("metadata = ?")
+                params.append(json.dumps(metadata))
+            if model:
+                updates.append("model = ?")
+                params.append(model)
+
+            if updates:
+                params.append(session_id)
+                query = f"UPDATE chat_sessions SET {', '.join(updates)} WHERE id = ?"
+                conn.execute(query, params)
+                conn.commit()
+                return conn.total_changes > 0
+            return False
 
     def delete_chat_session(self, session_id: str) -> bool:
         """Delete chat session and all its messages"""
@@ -175,6 +179,7 @@ class DatabaseService:
         message: str,
         model: str,
         files: Optional[List[Dict]] = None,
+        web_search_sources: Optional[List[Dict]] = None,
     ) -> str:
         """Add a message to a chat session"""
         message_id = str(uuid.uuid4())
@@ -187,20 +192,21 @@ class DatabaseService:
 
             # Insert into regular table for foreign key relationships
             conn.execute(
-                "INSERT INTO messages_meta (id, chat_id, user_id, model, files, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                "INSERT INTO messages_meta (id, chat_id, user_id, model, files, web_search_sources, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 (
                     message_id,
                     chat_id,
                     user_id,
                     model,
                     json.dumps(files) if files else None,
+                    json.dumps(web_search_sources) if web_search_sources else None,
                 ),
             )
 
-            # Update chat session timestamp
+            # Update chat session timestamp and model (to track the last used model)
             conn.execute(
-                "UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (chat_id,),
+                "UPDATE chat_sessions SET updated_at = CURRENT_TIMESTAMP, model = ? WHERE id = ?",
+                (model, chat_id),
             )
             conn.commit()
         return message_id
@@ -212,7 +218,7 @@ class DatabaseService:
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
+                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files, mm.web_search_sources
                 FROM messages m
                 JOIN messages_meta mm ON m.id = mm.id
                 WHERE mm.chat_id = ? 
@@ -232,6 +238,18 @@ class DatabaseService:
                         data["files"] = None
                 else:
                     data["files"] = None
+
+                # Parse web_search_sources JSON if present
+                if data.get("web_search_sources"):
+                    try:
+                        data["web_search_sources"] = json.loads(
+                            data["web_search_sources"]
+                        )
+                    except json.JSONDecodeError:
+                        data["web_search_sources"] = None
+                else:
+                    data["web_search_sources"] = None
+
                 messages.append(data)
             return messages
 
@@ -258,7 +276,7 @@ class DatabaseService:
             if chat_id:
                 cursor = conn.execute(
                     """
-                    SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
+                    SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files, mm.web_search_sources
                     FROM messages m
                     JOIN messages_meta mm ON m.id = mm.id
                     WHERE mm.chat_id = ? AND m.message MATCH ?
@@ -270,7 +288,7 @@ class DatabaseService:
             else:
                 cursor = conn.execute(
                     """
-                    SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
+                    SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files, mm.web_search_sources
                     FROM messages m
                     JOIN messages_meta mm ON m.id = mm.id
                     WHERE m.message MATCH ?
@@ -290,6 +308,18 @@ class DatabaseService:
                         data["files"] = None
                 else:
                     data["files"] = None
+
+                # Parse web_search_sources JSON if present
+                if data.get("web_search_sources"):
+                    try:
+                        data["web_search_sources"] = json.loads(
+                            data["web_search_sources"]
+                        )
+                    except json.JSONDecodeError:
+                        data["web_search_sources"] = None
+                else:
+                    data["web_search_sources"] = None
+
                 messages.append(data)
             return messages
 

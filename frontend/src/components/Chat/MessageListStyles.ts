@@ -273,3 +273,186 @@ export const enterButtonStyle = css`
     opacity: 1;
   }
 `;
+
+export const messageListStyle = css`
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+  height: 100%;
+`;
+
+export const messageStyle = css`
+  padding: 1rem;
+  border-radius: 0.75rem;
+  max-width: 80%;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+`;
+
+export const userMessageStyle = css`
+  ${messageStyle}
+  align-self: flex-end;
+  margin-left: auto;
+`;
+
+export const assistantMessageStyle = css`
+  ${messageStyle}
+  align-self: flex-start;
+  margin-right: auto;
+`;
+
+export const thinkingStyle = css`
+  ${assistantMessageStyle}
+`;
+
+export const streamingStyle = css`
+  ${assistantMessageStyle}
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.5rem;
+    width: 8px;
+    height: 8px;
+    background: #3b82f6;
+    border-radius: 50%;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+`;
+
+export const loadMoreButtonStyle = css`
+  padding: 0.5rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  align-self: center;
+  margin: 1rem 0;
+
+  &:hover {
+    background: #2563eb;
+  }
+
+  &:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: #1d4ed8;
+
+    &:hover {
+      background: #1e40af;
+    }
+  }
+`;
+
+export const progressBarContainerStyle = css`
+  width: 100%;
+  background: #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  margin: 0.5rem 0;
+
+  @media (prefers-color-scheme: dark) {
+    background: #374151;
+  }
+`;
+
+export const progressBarStyle = css`
+  height: 4px;
+  background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+  transition: width 0.3s ease;
+  border-radius: 0.5rem;
+`;
+
+export const progressTextStyle = css`
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+  text-align: center;
+
+  @media (prefers-color-scheme: dark) {
+    color: #9ca3af;
+  }
+`;
+
+export const lightEffectStyle = css`
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(59, 130, 246, 0.2) 50%,
+    transparent 100%
+  );
+  animation: lightSweep 2s ease-in-out infinite;
+  z-index: 1;
+
+  @keyframes lightSweep {
+    0% {
+      left: -100%;
+    }
+    50% {
+      left: 100%;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+`;
+
+export const stopButtonStyle = css`
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  z-index: 1000;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.3);
+      border-color: rgba(239, 68, 68, 0.6);
+    }
+  }
+`;

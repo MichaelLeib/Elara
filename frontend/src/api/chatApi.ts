@@ -223,6 +223,7 @@ export async function sendMessageWebSocket(
             confidence: data.confidence,
             reason: data.reason,
             sources: data.sources,
+            done: data.done,
           });
           // Dispatch a custom event for the UI to listen to
           window.dispatchEvent(
@@ -233,6 +234,7 @@ export async function sendMessageWebSocket(
                 confidence: data.confidence,
                 reason: data.reason,
                 sources: data.sources || [],
+                done: data.done,
               },
             })
           );
@@ -439,10 +441,6 @@ export async function getChatSessionMessages(
 ): Promise<ChatHistoryResponse> {
   const finalLimit = limit ?? settings.message_limit;
   const finalOffset = offset ?? settings.message_offset;
-
-  console.log(
-    `getChatSessionMessages called with sessionId=${sessionId}, limit=${limit}, offset=${offset}, using finalLimit=${finalLimit}, finalOffset=${finalOffset}`
-  ); // Debug log
 
   const res = await fetch(
     `${config.API_URL}/chat-sessions/${sessionId}/messages?limit=${finalLimit}&offset=${finalOffset}`

@@ -403,13 +403,6 @@ export function ChatHistory({
           </div>
         ) : (
           chatSessions.map((chat) => {
-            console.log("Rendering chat:", {
-              id: chat.id,
-              title: chat.title,
-              is_private: chat.is_private,
-              is_private_type: typeof chat.is_private,
-              is_private_boolean: Boolean(chat.is_private),
-            });
             return (
               <div
                 key={chat.id}

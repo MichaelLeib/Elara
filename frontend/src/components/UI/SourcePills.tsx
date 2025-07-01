@@ -62,6 +62,9 @@ const SourceName = styled.span`
   font-weight: 500;
   color: #1f2937;
   flex-shrink: 0;
+  @media (prefers-color-scheme: dark) {
+    color: #f3f4f6;
+  }
 `;
 
 const SourceUrl = styled.span<{ isExpanded: boolean }>`
@@ -93,6 +96,12 @@ const Snippet = styled.div<{ isExpanded: boolean }>`
   color: #374151;
   white-space: normal;
   word-wrap: break-word;
+
+  @media (prefers-color-scheme: dark) {
+    background: #1f2937;
+    border-color: #374151;
+    color: #f3f4f6;
+  }
 `;
 
 const PillWrapper = styled.div`
@@ -120,6 +129,25 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, className }) => {
 
   const getDomainName = (url: string) => {
     try {
+      // Handle DuckDuckGo redirect URLs
+      if (url.startsWith("//duckduckgo.com/l/?uddg=")) {
+        // Extract the encoded URL from the uddg parameter
+        const urlParams = new URLSearchParams(url.substring(url.indexOf("?")));
+        const encodedUrl = urlParams.get("uddg");
+        if (encodedUrl) {
+          const decodedUrl = decodeURIComponent(encodedUrl);
+          const domain = new URL(decodedUrl).hostname.replace("www.", "");
+          return domain;
+        }
+      }
+
+      // Handle protocol-relative URLs (starting with //)
+      if (url.startsWith("//")) {
+        const domain = url.substring(2).split("/")[0].replace("www.", "");
+        return domain;
+      }
+
+      // Handle regular URLs
       const domain = new URL(url).hostname.replace("www.", "");
       return domain;
     } catch {

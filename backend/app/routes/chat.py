@@ -362,6 +362,9 @@ A:"""
                     user_id="assistant",
                     message=full_response,
                     model=model,
+                    web_search_sources=(
+                        web_search_sources if web_search_sources else None
+                    ),
                 )
 
                 # Generate and store conversation summary (for both private and public chats)
@@ -647,6 +650,7 @@ A:"""
             user_id="assistant",
             message=ai_response,
             model=request.model,
+            web_search_sources=web_search_sources if web_search_sources else None,
         )
 
         # Generate and store conversation summary (for both private and public chats)

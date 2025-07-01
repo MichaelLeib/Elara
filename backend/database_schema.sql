@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS messages_meta (
     user_id TEXT NOT NULL,
     model TEXT NOT NULL,
     files TEXT,  -- JSON array of file information (filename, size, type, etc.)
+    web_search_sources TEXT,  -- JSON array of web search sources (title, url, snippet, favicon_url, domain)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (chat_id) REFERENCES chat_sessions(id) ON DELETE CASCADE

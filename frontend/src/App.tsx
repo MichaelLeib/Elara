@@ -139,6 +139,7 @@ function App() {
       updated_at: string;
       message_count: number;
       is_private?: boolean;
+      model?: string;
     }>
   >([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -164,7 +165,6 @@ function App() {
     const loadChatSessions = async () => {
       try {
         const response = await getChatSessions();
-        console.log("Received chat sessions from API:", response.sessions);
         setChatSessions(response.sessions);
         // Select the first session if none is selected
         if (!selectedSessionId && response.sessions.length > 0) {
@@ -213,14 +213,12 @@ function App() {
 
       setSelectedSessionId(sessionId);
       clearMessages(); // Clear previous messages
-      console.log("Settings in handleSelectChat:", settings); // Debug log
     },
     [settings, clearMessages]
   );
 
   const handleLoadMore = useCallback(async () => {
     if (selectedSessionId && settings) {
-      console.log("Settings in handleLoadMore:", settings); // Debug log
       await loadMore(selectedSessionId, settings, settings.message_limit);
     }
   }, [selectedSessionId, settings, loadMore]);
@@ -567,7 +565,6 @@ function App() {
   useEffect(() => {
     if (selectedSessionId && settings) {
       clearMessages(); // Clear previous messages
-      console.log("Settings in useEffect:", settings); // Debug log
       loadMessages(
         selectedSessionId,
         settings,

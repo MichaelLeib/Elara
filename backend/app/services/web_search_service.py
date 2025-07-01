@@ -363,13 +363,54 @@ If should_search is true, provide 3-5 relevant search terms."""
         """
         Perform a web search using the configured provider
         """
-        provider = getattr(settings, "web_search_search_provider", "serper").lower()
-        if provider == "serper":
-            return await self._search_serper(query)
-        elif provider == "duckduckgo_html":
-            return await self._search_duckduckgo_html(query)
-        # fallback to duckduckgo API
-        return await self._search_duckduckgo(query)
+        try:
+            print(
+                f"[WebSearchService] Starting web search with query: '{query}' (type: {type(query)})"
+            )
+
+            # Ensure query is a string and handle encoding properly
+            if isinstance(query, bytes):
+                print(f"[WebSearchService] Converting bytes query to string")
+                query = query.decode("utf-8", errors="ignore")
+            elif not isinstance(query, str):
+                print(f"[WebSearchService] Converting {type(query)} query to string")
+                query = str(query)
+
+            # Clean the query
+            query = query.strip()
+            print(f"[WebSearchService] Cleaned query: '{query}'")
+
+            if not query:
+                print("[WebSearchService] Empty query after cleaning")
+                return {
+                    "status": "error",
+                    "error": "Empty search query",
+                    "results": [],
+                    "query": query,
+                    "engine": "unknown",
+                }
+
+            provider = getattr(settings, "web_search_search_provider", "serper").lower()
+            print(f"[WebSearchService] Using provider: {provider}")
+
+            if provider == "serper":
+                return await self._search_serper(query)
+            elif provider == "duckduckgo_html":
+                return await self._search_duckduckgo_html(query)
+            # fallback to duckduckgo API
+            return await self._search_duckduckgo(query)
+        except Exception as e:
+            print(f"[WebSearchService] Error in perform_web_search: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "error": f"Web search failed: {str(e)}",
+                "results": [],
+                "query": query if "query" in locals() else "unknown",
+                "engine": "unknown",
+            }
 
     async def _search_duckduckgo(self, query: str) -> Dict[str, Any]:
         """
@@ -382,6 +423,22 @@ If should_search is true, provide 3-5 relevant search terms."""
             Search results
         """
         try:
+            # Ensure query is a string and handle encoding properly
+            if isinstance(query, bytes):
+                query = query.decode("utf-8", errors="ignore")
+            elif not isinstance(query, str):
+                query = str(query)
+
+            # Clean the query
+            query = query.strip()
+            if not query:
+                return {
+                    "status": "error",
+                    "error": "Empty query",
+                    "results": [],
+                    "query": query,
+                    "engine": "duckduckgo",
+                }
             async with httpx.AsyncClient(timeout=self.search_timeout) as client:
                 params = self.search_engines["duckduckgo"]["params"].copy()
                 params["q"] = query
@@ -470,6 +527,22 @@ If should_search is true, provide 3-5 relevant search terms."""
             Search results
         """
         try:
+            # Ensure query is a string and handle encoding properly
+            if isinstance(query, bytes):
+                query = query.decode("utf-8", errors="ignore")
+            elif not isinstance(query, str):
+                query = str(query)
+
+            # Clean the query
+            query = query.strip()
+            if not query:
+                return {
+                    "status": "error",
+                    "error": "Empty query",
+                    "results": [],
+                    "query": query,
+                    "engine": "serper",
+                }
             # Get API key from settings
             api_key = getattr(settings, "SERPER_API_KEY", None)
             if not api_key:
@@ -588,15 +661,38 @@ If should_search is true, provide 3-5 relevant search terms."""
             if url and url != "No URL":
                 # Extract domain for favicon
                 try:
-                    from urllib.parse import urlparse
+                    from urllib.parse import urlparse, parse_qs
+                    from urllib.parse import unquote
 
-                    parsed_url = urlparse(url)
-                    domain = parsed_url.netloc
+                    # Handle DuckDuckGo redirect URLs
+                    if url.startswith("//duckduckgo.com/l/?uddg="):
+                        # Extract the encoded URL from the uddg parameter
+                        if "?" in url:
+                            query_part = url[url.index("?") :]
+                            parsed_params = parse_qs(query_part)
+                            if "uddg" in parsed_params:
+                                encoded_url = parsed_params["uddg"][0]
+                                decoded_url = unquote(encoded_url)
+                                parsed_url = urlparse(decoded_url)
+                                domain = parsed_url.netloc
+                            else:
+                                domain = "duckduckgo.com"
+                        else:
+                            domain = "duckduckgo.com"
+                    # Handle protocol-relative URLs (starting with //)
+                    elif url.startswith("//"):
+                        domain = url[2:].split("/")[0]
+                    else:
+                        parsed_url = urlparse(url)
+                        domain = parsed_url.netloc
+
                     favicon_url = (
                         f"https://www.google.com/s2/favicons?domain={domain}&sz=32"
                     )
-                except:
+                except Exception as e:
+                    print(f"Error extracting domain from URL '{url}': {e}")
                     favicon_url = ""
+                    domain = ""
 
                 # Truncate long snippets to keep context very manageable
                 snippet = result.get("snippet", "")
@@ -609,7 +705,7 @@ If should_search is true, provide 3-5 relevant search terms."""
                         "url": url,
                         "snippet": snippet,
                         "favicon_url": favicon_url,
-                        "domain": domain if "domain" in locals() else "",
+                        "domain": domain if domain else "",
                     }
                 )
 
@@ -634,7 +730,35 @@ If should_search is true, provide 3-5 relevant search terms."""
         Fallback: Scrape DuckDuckGo HTML results page for organic results.
         """
         try:
+            print(
+                f"[DuckDuckGo HTML] Starting search with query: '{query}' (type: {type(query)})"
+            )
+
+            # Ensure query is a string and handle encoding properly
+            if isinstance(query, bytes):
+                print(f"[DuckDuckGo HTML] Converting bytes query to string")
+                query = query.decode("utf-8", errors="ignore")
+            elif not isinstance(query, str):
+                print(f"[DuckDuckGo HTML] Converting {type(query)} query to string")
+                query = str(query)
+
+            # Clean the query to remove any problematic characters
+            query = query.strip()
+            print(f"[DuckDuckGo HTML] Cleaned query: '{query}'")
+
+            if not query:
+                print("[DuckDuckGo HTML] Empty query after cleaning")
+                return {
+                    "status": "error",
+                    "error": "Empty query",
+                    "results": [],
+                    "query": query,
+                    "engine": "duckduckgo_html",
+                }
+
+            print(f"[DuckDuckGo HTML] About to call quote_plus with query: '{query}'")
             url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+            print(f"[DuckDuckGo HTML] Generated URL: {url}")
             headers = {"User-Agent": "Mozilla/5.0"}
             async with httpx.AsyncClient(timeout=self.search_timeout) as client:
                 response = await client.get(url, headers=headers)

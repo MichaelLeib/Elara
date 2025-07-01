@@ -83,3 +83,4 @@ dist-ssr/
 # Storage files (if they contain sensitive data)
 # Uncomment if you don't want to track storage files
 # storage/ 
+backend/storage/settings.json
