@@ -26,19 +26,15 @@ import {
   getFileIcon,
   formatFileSize,
   validateFiles,
+  hasSupportedClipboardContent,
+  handleClipboardPaste,
+  areFilesDuplicate,
+  debugClipboardContents,
 } from "../../utils/fileUtils";
 
 const messageInputContainerStyle = css`
-  width: 100%;
-  max-width: 64rem;
-  margin: 0 auto;
-  padding: 1.5rem 1.5rem 2rem 1.5rem;
-  background: rgba(255, 255, 255, 0.8);
+  padding: 0.25rem;
   backdrop-filter: blur(12px);
-
-  @media (prefers-color-scheme: dark) {
-    background: rgba(15, 23, 42, 0.8);
-  }
 `;
 
 const attachmentsPreviewStyle = css`
@@ -68,6 +64,56 @@ const attachmentItemStyle = css`
   @media (prefers-color-scheme: dark) {
     background: rgba(30, 41, 59, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+`;
+
+const imageAttachmentStyle = css`
+  ${attachmentItemStyle}
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.5rem;
+  min-width: 120px;
+`;
+
+const imageThumbnailStyle = css`
+  width: 80px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: #f3f4f6;
+  transition: opacity 0.2s ease;
+
+  @media (prefers-color-scheme: dark) {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: #374151;
+  }
+`;
+
+const imageThumbnailLoadingStyle = css`
+  ${imageThumbnailStyle}
+  opacity: 0.6;
+`;
+
+const imageInfoStyle = css`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  justify-content: space-between;
+`;
+
+const imageNameStyle = css`
+  color: #374151;
+  font-weight: 500;
+  font-size: 0.75rem;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  @media (prefers-color-scheme: dark) {
+    color: #e5e7eb;
   }
 `;
 
@@ -107,12 +153,12 @@ const removeButtonStyle = css`
 const mainInputAreaStyle = css`
   display: flex;
   flex-direction: row;
-  align-items: flex-end;
+  align-items: center;
   gap: 1rem;
   background: white;
   border-radius: 1.5rem;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  padding: 1.25rem;
+  padding: 0.2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transition: all 0.2s ease;
 
@@ -467,9 +513,12 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
     const [dragCounter, setDragCounter] = useState(0);
+    const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+    const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const objectUrlsRef = useRef<Set<string>>(new Set());
 
     const { models, loading: isLoadingModels } = useModels();
     const { settings } = useSettings();
@@ -534,6 +583,16 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     const handleSend = () => {
       if (!message.trim() || disabled || !selectedModel) return;
 
+      // Clean up all object URLs before sending
+      objectUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.warn("Error revoking object URL on send:", error);
+        }
+      });
+      objectUrlsRef.current.clear();
+
       onSendMessage(message, selectedModel.name, attachments);
       setMessage("");
       setAttachments([]);
@@ -554,32 +613,121 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     const handleTextareaChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
       setMessage(e.target.value);
 
-      // Auto-resize textarea
+      // Auto-resize textarea - only grow if content actually overflows
       const textarea = e.target;
+
+      // Calculate the height needed for a single line
+      const lineHeight = 1.5; // matches CSS line-height
+      const fontSize = 0.95; // matches CSS font-size (in rem)
+      const padding = 0.75; // matches CSS padding (in rem)
+      const singleLineHeight = fontSize * lineHeight + padding * 2; // in rem
+      const singleLineHeightPx = singleLineHeight * 16; // convert rem to px (assuming 16px base)
+
+      // Reset height to auto to get the actual scroll height
       textarea.style.height = "auto";
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+      const scrollHeight = textarea.scrollHeight;
+
+      // Only grow if content actually overflows the single line
+      if (scrollHeight > singleLineHeightPx) {
+        textarea.style.height = `${Math.min(scrollHeight, 120)}px`;
+      } else {
+        textarea.style.height = `${singleLineHeightPx}px`;
+      }
     };
 
-    const validateAndAddFiles = useCallback((files: FileList | File[]) => {
-      const fileArray = Array.from(files);
-      const { valid, errors } = validateFiles(fileArray);
+    const handlePaste = async (e: React.ClipboardEvent) => {
+      // Debug clipboard contents
+      debugClipboardContents(e.nativeEvent);
 
-      if (errors.length > 0) {
-        alert(
-          `File validation errors:\n${errors.join(
-            "\n"
-          )}\n\nSupported types: ${SUPPORTED_FILE_TYPES.join(
-            ", "
-          )}\nMax file size: 10MB`
-        );
+      // Check if clipboard contains supported files or images
+      if (hasSupportedClipboardContent(e.nativeEvent)) {
+        e.preventDefault(); // Prevent default paste behavior
+
+        try {
+          const { files, errors } = await handleClipboardPaste(e.nativeEvent);
+
+          if (errors.length > 0) {
+            alert(
+              `Clipboard paste errors:\n${errors.join(
+                "\n"
+              )}\n\nSupported types: ${SUPPORTED_FILE_TYPES.join(
+                ", "
+              )}\nMax file size: 10MB`
+            );
+          }
+
+          if (files.length > 0) {
+            console.log(`Processing ${files.length} files from clipboard`);
+
+            // Check for duplicates with existing attachments
+            const newFiles = files.filter((newFile) => {
+              const isDuplicate = attachments.some((existingFile) =>
+                areFilesDuplicate(newFile, existingFile)
+              );
+
+              if (isDuplicate) {
+                console.log(`Skipping duplicate pasted file: ${newFile.name}`);
+                return false;
+              }
+              return true;
+            });
+
+            console.log(`After duplicate check: ${newFiles.length} new files`);
+
+            if (newFiles.length > 0) {
+              setAttachments((prev) => [...prev, ...newFiles]);
+            } else if (files.length > 0) {
+              alert("All pasted files are duplicates of existing attachments");
+            }
+          }
+        } catch (error) {
+          console.error("Error handling clipboard paste:", error);
+          alert("Failed to process clipboard content");
+        }
       }
+      // If no supported files, let the default paste behavior continue
+    };
 
-      if (valid.length > 0) {
-        setAttachments((prev) => [...prev, ...valid]);
-      }
+    const validateAndAddFiles = useCallback(
+      (files: FileList | File[]) => {
+        const fileArray = Array.from(files);
+        const { valid, errors } = validateFiles(fileArray);
 
-      return valid.length > 0;
-    }, []);
+        if (errors.length > 0) {
+          alert(
+            `File validation errors:\n${errors.join(
+              "\n"
+            )}\n\nSupported types: ${SUPPORTED_FILE_TYPES.join(
+              ", "
+            )}\nMax file size: 10MB`
+          );
+        }
+
+        if (valid.length > 0) {
+          // Check for duplicates with existing attachments
+          const newFiles = valid.filter((newFile) => {
+            const isDuplicate = attachments.some((existingFile) =>
+              areFilesDuplicate(newFile, existingFile)
+            );
+
+            if (isDuplicate) {
+              console.log(`Skipping duplicate file: ${newFile.name}`);
+              return false;
+            }
+            return true;
+          });
+
+          if (newFiles.length > 0) {
+            setAttachments((prev) => [...prev, ...newFiles]);
+          } else if (valid.length > 0) {
+            alert("All files are duplicates of existing attachments");
+          }
+        }
+
+        return valid.length > 0;
+      },
+      [attachments]
+    );
 
     const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
@@ -594,7 +742,84 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
     };
 
     const removeAttachment = (index: number) => {
-      setAttachments((prev) => prev.filter((_, i) => i !== index));
+      setAttachments((prev) => {
+        const newAttachments = prev.filter((_, i) => i !== index);
+
+        // Clean up object URL for the removed image
+        const removedFile = prev[index];
+        if (removedFile && removedFile.type.startsWith("image")) {
+          // Find and revoke the object URL for this file
+          objectUrlsRef.current.forEach((url) => {
+            try {
+              URL.revokeObjectURL(url);
+            } catch (error) {
+              console.warn("Error revoking object URL:", error);
+            }
+          });
+          objectUrlsRef.current.clear();
+        }
+
+        return newAttachments;
+      });
+    };
+
+    // Cleanup object URLs on unmount
+    useEffect(() => {
+      return () => {
+        objectUrlsRef.current.forEach((url) => {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (error) {
+            console.warn("Error revoking object URL on cleanup:", error);
+          }
+        });
+        objectUrlsRef.current.clear();
+      };
+    }, []);
+
+    // Manage image URLs and loading states when attachments change
+    useEffect(() => {
+      const newImageUrls = new Map<string, string>();
+      const newLoadingImages = new Set<string>();
+
+      attachments.forEach((file) => {
+        if (file.type.startsWith("image")) {
+          const url = URL.createObjectURL(file);
+          newImageUrls.set(file.name, url);
+          objectUrlsRef.current.add(url);
+          newLoadingImages.add(file.name);
+        }
+      });
+
+      setImageUrls(newImageUrls);
+      setLoadingImages(newLoadingImages);
+
+      // Cleanup function
+      return () => {
+        newImageUrls.forEach((url) => {
+          try {
+            URL.revokeObjectURL(url);
+          } catch (error) {
+            console.warn("Error revoking object URL:", error);
+          }
+        });
+      };
+    }, [attachments]);
+
+    const handleImageLoad = (fileName: string) => {
+      setLoadingImages((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(fileName);
+        return newSet;
+      });
+    };
+
+    const handleImageError = (fileName: string) => {
+      setLoadingImages((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(fileName);
+        return newSet;
+      });
     };
 
     // Drag and drop handlers
@@ -673,7 +898,9 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
         {/* Drag Overlay */}
         {isDragOver && (
           <div css={dragOverlayStyle}>
-            <div css={dragOverlayContentStyle}>Drop files here to analyze</div>
+            <div css={dragOverlayContentStyle}>
+              Drop documents and images here to analyze
+            </div>
           </div>
         )}
 
@@ -684,20 +911,68 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
               {attachments.map((file, index) => (
                 <div
                   key={index}
-                  css={attachmentItemStyle}
+                  css={
+                    file.type.startsWith("image")
+                      ? imageAttachmentStyle
+                      : attachmentItemStyle
+                  }
                 >
-                  <span css={fileTypeIconStyle}>{getFileIcon(file.name)}</span>
-                  <span css={attachmentTextStyle}>
-                    {file.name} ({formatFileSize(file.size)})
-                  </span>
-                  <button
-                    onClick={() => removeAttachment(index)}
-                    css={removeButtonStyle}
-                    type="button"
-                    title="Remove file"
-                  >
-                    <FaXmark size={12} />
-                  </button>
+                  {file.type.startsWith("image") ? (
+                    <>
+                      {imageUrls.get(file.name) && (
+                        <img
+                          src={imageUrls.get(file.name) || undefined}
+                          alt={file.name}
+                          css={
+                            loadingImages.has(file.name)
+                              ? imageThumbnailLoadingStyle
+                              : imageThumbnailStyle
+                          }
+                          onLoad={() => handleImageLoad(file.name)}
+                          onError={() => handleImageError(file.name)}
+                        />
+                      )}
+                      <div css={imageInfoStyle}>
+                        <span css={imageNameStyle}>{file.name}</span>
+                        <span
+                          css={css`
+                            color: #6b7280;
+                            font-size: 0.625rem;
+                            @media (prefers-color-scheme: dark) {
+                              color: #9ca3af;
+                            }
+                          `}
+                        >
+                          {formatFileSize(file.size)}
+                        </span>
+                        <button
+                          onClick={() => removeAttachment(index)}
+                          css={removeButtonStyle}
+                          type="button"
+                          title="Remove file"
+                        >
+                          <FaXmark size={12} />
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span css={fileTypeIconStyle}>
+                        {getFileIcon(file.name)}
+                      </span>
+                      <span css={attachmentTextStyle}>
+                        {file.name} ({formatFileSize(file.size)})
+                      </span>
+                      <button
+                        onClick={() => removeAttachment(index)}
+                        css={removeButtonStyle}
+                        type="button"
+                        title="Remove file"
+                      >
+                        <FaXmark size={12} />
+                      </button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -730,7 +1005,18 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
               multiple
               onChange={handleFileSelect}
               css={hiddenInputStyle}
-              accept={SUPPORTED_FILE_TYPES.join(",")}
+              accept={[
+                ...SUPPORTED_FILE_TYPES,
+                // Add MIME types for better browser support
+                "image/jpeg",
+                "image/jpg",
+                "image/png",
+                "image/gif",
+                "image/bmp",
+                "image/webp",
+                "image/tiff",
+                "image/tif",
+              ].join(",")}
             />
           </ErrorBoundary>
 
@@ -801,9 +1087,10 @@ export const MessageInput = forwardRef<MessageInputHandle, MessageInputProps>(
                 value={message}
                 onChange={handleTextareaChange}
                 onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
                 placeholder={
                   attachments.length > 0
-                    ? "Ask about your documents..."
+                    ? "Ask about your documents and images..."
                     : placeholder
                 }
                 disabled={disabled}

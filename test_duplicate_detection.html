@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Duplicate Detection Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .test-area {
+        border: 2px dashed #ccc;
+        padding: 20px;
+        margin: 20px 0;
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f9f9f9;
+      }
+      .file-list {
+        margin: 20px 0;
+        padding: 10px;
+        background: #f0f0f0;
+        border-radius: 5px;
+      }
+      .file-item {
+        margin: 5px 0;
+        padding: 5px;
+        background: white;
+        border-radius: 3px;
+      }
+      button {
+        margin: 10px 5px;
+        padding: 10px 20px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      .log {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 5px;
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Duplicate Detection Test</h1>
+
+    <div
+      class="test-area"
+      id="dropZone"
+    >
+      <div>
+        <p>Drop files here or paste from clipboard</p>
+        <button onclick="document.getElementById('fileInput').click()">
+          Select Files
+        </button>
+        <button onclick="pasteFromClipboard()">Paste from Clipboard</button>
+      </div>
+    </div>
+
+    <input
+      type="file"
+      id="fileInput"
+      multiple
+      accept="image/*,.pdf,.docx,.txt"
+      style="display: none"
+    />
+
+    <div
+      class="file-list"
+      id="fileList"
+    >
+      <h3>Selected Files:</h3>
+      <div id="files"></div>
+    </div>
+
+    <div
+      class="log"
+      id="log"
+    >
+      <h3>Debug Log:</h3>
+      <div id="logContent"></div>
+    </div>
+
+    <script>
+      let selectedFiles = [];
+
+      function log(message) {
+        const logContent = document.getElementById("logContent");
+        const timestamp = new Date().toLocaleTimeString();
+        logContent.innerHTML += `[${timestamp}] ${message}\n`;
+        logContent.scrollTop = logContent.scrollHeight;
+      }
+
+      function updateFileList() {
+        const filesDiv = document.getElementById("files");
+        filesDiv.innerHTML = "";
+
+        selectedFiles.forEach((file, index) => {
+          const fileItem = document.createElement("div");
+          fileItem.className = "file-item";
+          fileItem.innerHTML = `
+                    <strong>${file.name}</strong> (${(file.size / 1024).toFixed(
+            1
+          )} KB, ${file.type})
+                    <button onclick="removeFile(${index})" style="float: right; background: #dc3545; padding: 2px 8px; font-size: 10px;">Remove</button>
+                `;
+          filesDiv.appendChild(fileItem);
+        });
+      }
+
+      function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        updateFileList();
+        log(`Removed file at index ${index}`);
+      }
+
+      function areFilesDuplicate(file1, file2) {
+        // Check if they have the same size and type
+        if (file1.size === file2.size && file1.type === file2.type) {
+          // For images, also check if they have similar names
+          if (
+            file1.type.startsWith("image/") &&
+            file2.type.startsWith("image/")
+          ) {
+            const name1 = file1.name.toLowerCase();
+            const name2 = file2.name.toLowerCase();
+
+            // If one is a "pasted-image" and the other is a regular filename, they're likely duplicates
+            if (
+              (name1.includes("pasted-image") &&
+                !name2.includes("pasted-image")) ||
+              (name2.includes("pasted-image") &&
+                !name1.includes("pasted-image"))
+            ) {
+              return true;
+            }
+
+            // If they have the same base name (ignoring extension), they might be duplicates
+            const baseName1 = name1.split(".")[0];
+            const baseName2 = name2.split(".")[0];
+            if (baseName1 === baseName2) {
+              return true;
+            }
+          }
+
+          return true;
+        }
+
+        return false;
+      }
+
+      function addFiles(newFiles) {
+        log(`Attempting to add ${newFiles.length} files`);
+
+        newFiles.forEach((file) => {
+          log(
+            `Processing file: ${file.name} (${file.size} bytes, ${file.type})`
+          );
+
+          // Check for duplicates
+          const isDuplicate = selectedFiles.some((existingFile) =>
+            areFilesDuplicate(file, existingFile)
+          );
+
+          if (isDuplicate) {
+            log(`Skipping duplicate file: ${file.name}`);
+          } else {
+            selectedFiles.push(file);
+            log(`Added file: ${file.name}`);
+          }
+        });
+
+        updateFileList();
+      }
+
+      function debugClipboardContents(event) {
+        log("=== Clipboard Debug Info ===");
+
+        if (event.clipboardData?.files) {
+          log(`Files in clipboard: ${event.clipboardData.files.length}`);
+          Array.from(event.clipboardData.files).forEach((file, index) => {
+            log(
+              `  File ${index}: ${file.name} (${file.size} bytes, ${file.type})`
+            );
+          });
+        } else {
+          log("No files in clipboard");
+        }
+
+        if (event.clipboardData?.items) {
+          log(`Items in clipboard: ${event.clipboardData.items.length}`);
+          for (let i = 0; i < event.clipboardData.items.length; i++) {
+            const item = event.clipboardData.items[i];
+            log(`  Item ${i}: ${item.type} (${item.kind})`);
+          }
+        } else {
+          log("No items in clipboard");
+        }
+
+        log("=== End Debug Info ===");
+      }
+
+      function handleClipboardPaste(event) {
+        const files = [];
+        const errors = [];
+        const processedImages = new Set();
+
+        log("Starting clipboard paste processing");
+
+        try {
+          // First, check for files in clipboard (these take priority)
+          if (
+            event.clipboardData?.files &&
+            event.clipboardData.files.length > 0
+          ) {
+            log("Processing clipboard files");
+            const clipboardFiles = Array.from(event.clipboardData.files);
+
+            for (const file of clipboardFiles) {
+              if (file.size > 10 * 1024 * 1024) {
+                errors.push(
+                  `File too large: ${file.name} (${(
+                    file.size /
+                    1024 /
+                    1024
+                  ).toFixed(1)}MB)`
+                );
+              } else {
+                files.push(file);
+
+                // If this is an image file, mark it as processed
+                if (file.type.startsWith("image/")) {
+                  const imageKey = `${file.size}-${file.type}`;
+                  processedImages.add(imageKey);
+                  log(`Marked image as processed: ${imageKey}`);
+                }
+              }
+            }
+          }
+
+          // Then check for images in clipboard (items) - only if no files were found
+          if (event.clipboardData?.items && files.length === 0) {
+            log("Processing clipboard items (no files found)");
+            for (let i = 0; i < event.clipboardData.items.length; i++) {
+              const item = event.clipboardData.items[i];
+
+              if (item.type.startsWith("image/")) {
+                try {
+                  const file = item.getAsFile();
+                  if (file) {
+                    // Create a key to check for duplicates
+                    const imageKey = `${file.size}-${item.type}`;
+
+                    // Skip if we already processed this image as a file
+                    if (processedImages.has(imageKey)) {
+                      log("Skipping duplicate image from clipboard items");
+                      continue;
+                    }
+
+                    // Generate a filename for pasted images
+                    const extension = item.type.split("/")[1];
+                    const filename = `pasted-image-${Date.now()}.${extension}`;
+
+                    // Create a new file with a proper name
+                    const renamedFile = new File([file], filename, {
+                      type: item.type,
+                      lastModified: Date.now(),
+                    });
+
+                    if (renamedFile.size > 10 * 1024 * 1024) {
+                      errors.push(
+                        `Pasted image too large: ${(
+                          renamedFile.size /
+                          1024 /
+                          1024
+                        ).toFixed(1)}MB`
+                      );
+                    } else {
+                      files.push(renamedFile);
+                      processedImages.add(imageKey);
+                      log(`Added pasted image: ${filename}`);
+                    }
+                  }
+                } catch (error) {
+                  log(`Error processing pasted image: ${error}`);
+                  errors.push("Failed to process pasted image");
+                }
+              }
+            }
+          }
+
+          log(
+            `Clipboard processing complete: ${files.length} files, ${errors.length} errors`
+          );
+          return { files, errors };
+        } catch (error) {
+          log(`Error handling clipboard paste: ${error}`);
+          errors.push("Failed to process clipboard content");
+          return { files, errors };
+        }
+      }
+
+      function pasteFromClipboard() {
+        log("Attempting to paste from clipboard");
+        navigator.clipboard
+          .read()
+          .then((clipboardItems) => {
+            log(`Clipboard contains ${clipboardItems.length} items`);
+
+            const files = [];
+            clipboardItems.forEach((item) => {
+              item.types.forEach((type) => {
+                if (type.startsWith("image/")) {
+                  item.getType(type).then((blob) => {
+                    const file = new File(
+                      [blob],
+                      `pasted-image-${Date.now()}.${type.split("/")[1]}`,
+                      { type }
+                    );
+                    files.push(file);
+                    if (files.length === clipboardItems.length) {
+                      addFiles(files);
+                    }
+                  });
+                }
+              });
+            });
+          })
+          .catch((err) => {
+            log(`Clipboard read error: ${err}`);
+            alert(
+              "Failed to read clipboard. Please try pasting with Ctrl+V instead."
+            );
+          });
+      }
+
+      // File input handler
+      document.getElementById("fileInput").addEventListener("change", (e) => {
+        const files = Array.from(e.target.files);
+        log(`File input selected ${files.length} files`);
+        addFiles(files);
+      });
+
+      // Paste handler
+      document.addEventListener("paste", (e) => {
+        log("Paste event detected");
+        debugClipboardContents(e);
+
+        const { files, errors } = handleClipboardPaste(e);
+
+        if (errors.length > 0) {
+          log(`Paste errors: ${errors.join(", ")}`);
+          alert(`Paste errors:\n${errors.join("\n")}`);
+        }
+
+        if (files.length > 0) {
+          addFiles(files);
+        }
+      });
+
+      // Drag and drop handlers
+      const dropZone = document.getElementById("dropZone");
+
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = "#007bff";
+        dropZone.style.background = "#e3f2fd";
+      });
+
+      dropZone.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = "#ccc";
+        dropZone.style.background = "#f9f9f9";
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = "#ccc";
+        dropZone.style.background = "#f9f9f9";
+
+        const files = Array.from(e.dataTransfer.files);
+        log(`Dropped ${files.length} files`);
+        addFiles(files);
+      });
+
+      log(
+        "Test page loaded. Try copying an image and pasting it multiple times to test duplicate detection."
+      );
+    </script>
+  </body>
+</html>

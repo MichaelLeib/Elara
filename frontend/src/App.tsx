@@ -163,6 +163,7 @@ function App() {
     const loadChatSessions = async () => {
       try {
         const response = await getChatSessions();
+        console.log("Received chat sessions from API:", response.sessions);
         setChatSessions(response.sessions);
         // Select the first session if none is selected
         if (!selectedSessionId && response.sessions.length > 0) {
@@ -174,6 +175,33 @@ function App() {
     };
     loadChatSessions();
   }, [selectedSessionId]);
+
+  // Handle stop analysis requests
+  useEffect(() => {
+    const handleStopAnalysis = (event: CustomEvent) => {
+      console.log("🔄 [APP] Stop analysis requested", event.detail);
+      console.log("🔄 [APP] Current loading state:", isLoading);
+      // Send stop message to WebSocket - we'll need to access it through a global store
+      // For now, we'll dispatch an event that the WebSocket handler can listen to
+      window.dispatchEvent(
+        new CustomEvent("websocket-stop-request", {
+          detail: { timestamp: event.detail.timestamp },
+        })
+      );
+      console.log("🔄 [APP] websocket-stop-request event dispatched");
+    };
+
+    window.addEventListener(
+      "stop-analysis",
+      handleStopAnalysis as EventListener
+    );
+    return () => {
+      window.removeEventListener(
+        "stop-analysis",
+        handleStopAnalysis as EventListener
+      );
+    };
+  }, [isLoading]);
 
   const handleSelectChat = useCallback(
     async (sessionId: string) => {
@@ -198,7 +226,9 @@ function App() {
 
   const handleNewChat = async () => {
     try {
+      console.log("Creating new chat with title: New Chat");
       const response = await createChatSession("New Chat");
+      console.log("New chat created:", response.session);
       const newSession = response.session;
       setChatSessions((prev) => [newSession, ...prev]);
       setSelectedSessionId(newSession.id);
@@ -324,10 +354,18 @@ function App() {
 
             setIsLoading(false);
           } else if (done) {
-            // Mark as complete - don't update message content since it's already accumulated
-            updateMessage(assistantMessageId, {
-              updated_at: new Date().toISOString(),
-            });
+            // For image analysis and other complete messages, update the content
+            if (chunk && chunk.trim()) {
+              updateMessage(assistantMessageId, {
+                message: chunk,
+                updated_at: new Date().toISOString(),
+              });
+            } else {
+              // Mark as complete - don't update message content since it's already accumulated
+              updateMessage(assistantMessageId, {
+                updated_at: new Date().toISOString(),
+              });
+            }
 
             // Stop streaming indicator
             window.dispatchEvent(
@@ -381,7 +419,6 @@ function App() {
               const isStatusUpdate =
                 chunk &&
                 (chunk.includes("Processing") ||
-                  chunk.includes("Analyzing") ||
                   chunk.includes("Validating") ||
                   chunk.includes("Extracting") ||
                   chunk.includes("Combining") ||
@@ -390,7 +427,21 @@ function App() {
                   chunk.includes("chunk") ||
                   chunk.includes("Synthesizing") ||
                   chunk.includes("Streaming") ||
-                  chunk.includes("complete"));
+                  chunk.includes("complete") ||
+                  // More specific status patterns that are clearly not content
+                  chunk.match(
+                    /^(Processing|Analyzing|Validating|Extracting|Combining|Preparing|Document|chunk|Synthesizing|Streaming|complete)/i
+                  ) ||
+                  // Very short messages that are likely status updates
+                  (chunk.length < 50 &&
+                    chunk.match(
+                      /^(Processing|Analyzing|Validating|Extracting|Combining|Preparing|Document|chunk|Synthesizing|Streaming|complete)/i
+                    )) ||
+                  // Messages that are just status updates without actual content
+                  (chunk.length < 100 &&
+                    !chunk.includes(".") &&
+                    !chunk.includes("!") &&
+                    !chunk.includes("?")));
 
               if (chunk && chunk.trim() && !isStatusUpdate) {
                 // This is actual analysis content, not a status update

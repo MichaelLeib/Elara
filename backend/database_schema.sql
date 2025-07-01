@@ -152,7 +152,7 @@ FROM messages m
 JOIN messages_meta mm ON m.id = mm.id
 JOIN chat_sessions cs ON mm.chat_id = cs.id
 WHERE mm.created_at > datetime('now', '-7 days')
-ORDER BY mm.created_at DESC;
+ORDER BY mm.created_at ASC;
 
 CREATE VIEW IF NOT EXISTS important_memory AS
 SELECT 

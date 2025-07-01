@@ -103,7 +103,6 @@ const dotStyle = css`
 export function AnimatedThinking() {
   return (
     <div css={thinkingContainerStyle}>
-      <div css={lightEffectStyle} />
       <span css={thinkingTextStyle}>Thinking</span>
       <div css={dotsContainerStyle}>
         <div css={dotStyle} />

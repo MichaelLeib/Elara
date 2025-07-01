@@ -296,8 +296,30 @@ class DatabaseService:
     def get_recent_context(self, days: int = 7, limit: int = 20) -> List[Dict]:
         """Get recent messages for context"""
         with self._get_connection() as conn:
-            cursor = conn.execute("SELECT * FROM recent_chat_context LIMIT ?", (limit,))
-            return [dict(row) for row in cursor.fetchall()]
+            cursor = conn.execute(
+                """
+                SELECT m.id, m.chat_id, m.user_id, m.message, m.model, m.created_at, m.updated_at, mm.files
+                FROM messages m
+                JOIN messages_meta mm ON m.id = mm.id
+                WHERE mm.created_at > datetime('now', '-7 days')
+                ORDER BY mm.created_at DESC 
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            messages = []
+            for row in cursor.fetchall():
+                data = dict(row)
+                # Parse files JSON if present
+                if data.get("files"):
+                    try:
+                        data["files"] = json.loads(data["files"])
+                    except json.JSONDecodeError:
+                        data["files"] = None
+                else:
+                    data["files"] = None
+                messages.append(data)
+            return messages
 
     def get_public_chat_context(self, session_id: str, limit: int = 10) -> Dict:
         """Get context for public chats including summaries and memories"""

@@ -72,12 +72,6 @@ export const AnimatedProgressText = ({ text }: { text: string }) => {
   >("idle");
 
   useEffect(() => {
-    console.log("🔄 [ANIMATED-PROGRESS] Text changed:", {
-      oldText: currentText,
-      newText: text,
-      animationPhase,
-    });
-
     if (text !== currentText) {
       // Start exit animation
       setAnimationPhase("exit");

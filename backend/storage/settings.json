@@ -7,6 +7,9 @@
   "document": {
     "TIMEOUT": 600
   },
+  "image": {
+    "IMAGE_TIMEOUT": 300
+  },
   "chat": {
     "MESSAGE_LIMIT": 5,
     "MESSAGE_OFFSET": 0

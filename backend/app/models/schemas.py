@@ -43,6 +43,22 @@ class DocumentAnalysisResponse(BaseModel):
     chunks_analyzed: Optional[int] = None
 
 
+class ImageAnalysisRequest(BaseModel):
+    files: List[dict]  # List of image file objects with filename and content
+    prompt: str
+    model: Optional[str] = None
+
+
+class ImageAnalysisResponse(BaseModel):
+    status: str
+    analysis: str
+    images_processed: int
+    method: str  # 'vision_model', 'scaled', 'split', 'scaled_split'
+    model_used: str
+    analysis_strategy: dict  # Contains intent analysis results
+    image_details: Optional[List[dict]] = None  # Image information (size, format, etc.)
+
+
 class MemoryEntry(BaseModel):
     key: str
     value: str

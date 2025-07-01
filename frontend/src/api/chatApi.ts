@@ -17,6 +17,24 @@ import type {
   UpdateChatSessionResponse,
 } from "./models";
 
+// Global WebSocket store for stop functionality
+let currentWebSocket: WebSocket | null = null;
+
+// Listen for stop requests
+if (typeof window !== "undefined") {
+  window.addEventListener("websocket-stop-request", ((event: CustomEvent) => {
+    if (currentWebSocket && currentWebSocket.readyState === WebSocket.OPEN) {
+      const stopMessage = {
+        type: "stop",
+        timestamp: event.detail.timestamp,
+      };
+      currentWebSocket.send(JSON.stringify(stopMessage));
+    } else {
+      console.warn("🔄 [CHATAPI] WebSocket not available for stop request");
+    }
+  }) as EventListener);
+}
+
 export async function sendMessageWebSocket(
   message: string,
   model?: string,
@@ -44,6 +62,9 @@ export async function sendMessageWebSocket(
     config.API_URL.replace("http://", "ws://").replace("https://", "wss://") +
     "/chat";
   const ws = new WebSocket(wsUrl);
+
+  // Store the WebSocket instance globally for stop functionality
+  currentWebSocket = ws;
 
   return new Promise((resolve, reject) => {
     ws.onopen = () => {
@@ -102,10 +123,12 @@ export async function sendMessageWebSocket(
         } else if (data.type === "done") {
           onChunk?.("", true);
           ws.close();
+          currentWebSocket = null;
           resolve();
         } else if (data.type === "error") {
           onChunk?.("", true, data.content);
           ws.close();
+          currentWebSocket = null;
           reject(new Error(data.content));
         } else if (data.type === "document_analysis") {
           // Handle document analysis response
@@ -120,11 +143,52 @@ export async function sendMessageWebSocket(
             console.log("Document analysis metadata:", data.metadata);
           }
           ws.close();
+          currentWebSocket = null;
+          resolve();
+        } else if (data.type === "image_analysis") {
+          // Handle image analysis response
+          console.log("Frontend received image_analysis response:", {
+            contentLength: data.content?.length || 0,
+            metadata: data.metadata,
+            progress: data.progress,
+            done: data.done,
+          });
+          onChunk?.(data.content, true);
+          if (data.metadata) {
+            console.log("Image analysis metadata:", data.metadata);
+          }
+          ws.close();
+          currentWebSocket = null;
           resolve();
         } else if (data.type === "document_analysis_chunk") {
           // Handle streaming document analysis chunks
           console.log(
             "🔄 [WEBSOCKET] Frontend received document_analysis_chunk:",
+            {
+              contentLength: data.content?.length || 0,
+              progress: data.progress,
+              done: data.done,
+              content:
+                data.content?.substring(0, 100) +
+                (data.content?.length > 100 ? "..." : ""),
+            }
+          );
+          onChunk?.(data.content, false, undefined, data.progress);
+        } else if (data.type === "file_analysis_chunk") {
+          // Handle streaming file analysis chunks (documents and images)
+          console.log("🔄 [WEBSOCKET] Frontend received file_analysis_chunk:", {
+            contentLength: data.content?.length || 0,
+            progress: data.progress,
+            done: data.done,
+            content:
+              data.content?.substring(0, 100) +
+              (data.content?.length > 100 ? "..." : ""),
+          });
+          onChunk?.(data.content, false, undefined, data.progress);
+        } else if (data.type === "image_analysis_chunk") {
+          // Handle streaming image analysis chunks
+          console.log(
+            "🔄 [WEBSOCKET] Frontend received image_analysis_chunk:",
             {
               contentLength: data.content?.length || 0,
               progress: data.progress,
@@ -172,23 +236,27 @@ export async function sendMessageWebSocket(
           // Fallback for non-streaming responses
           onChunk?.(event.data, true);
           ws.close();
+          currentWebSocket = null;
           resolve();
         }
       } catch {
         // If parsing fails, treat as plain text
         onChunk?.(event.data, true);
         ws.close();
+        currentWebSocket = null;
         resolve();
       }
     };
 
     ws.onerror = (event) => {
       console.error("WebSocket error:", event);
+      currentWebSocket = null;
       reject(new Error("WebSocket connection failed"));
     };
 
     ws.onclose = () => {
       console.log("WebSocket connection closed");
+      currentWebSocket = null;
     };
   });
 }

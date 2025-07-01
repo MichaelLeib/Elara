@@ -60,6 +60,10 @@ class Settings:
         return getattr(self, "_document_timeout", 600.0) or 600.0
 
     @property
+    def image_timeout(self) -> float:
+        return getattr(self, "_image_timeout", 120.0) or 120.0
+
+    @property
     def message_limit(self) -> int:
         return self._message_limit
 

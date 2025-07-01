@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MessageListProps as OriginalMessageListProps } from "./models";
 import dayjs from "dayjs";
-import { FaArrowDown } from "react-icons/fa";
+import { FaArrowDown, FaStop } from "react-icons/fa";
 import {
   messageBubbleStyle,
   messageTimestampStyle,
@@ -193,6 +193,41 @@ const lightEffectStyle = css`
   }
 `;
 
+const stopButtonStyle = css`
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  z-index: 1000;
+
+  &:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+
+    &:hover {
+      background: rgba(239, 68, 68, 0.3);
+      border-color: rgba(239, 68, 68, 0.6);
+    }
+  }
+`;
+
 export function MessageList({
   messages,
   isThinking = false,
@@ -225,16 +260,29 @@ export function MessageList({
     message: "",
     savedItems: [],
   });
+  const [isStopping, setIsStopping] = useState(false);
   const isAutoScrollingRef = useRef(false);
 
-  // Filter out any invalid messages
-  const validMessages = messages.filter((msg) => {
-    if (!msg || typeof msg !== "object") {
-      console.warn("Invalid message found:", msg);
-      return false;
-    }
-    return true;
-  });
+  // Filter out any invalid messages and sort in chronological order (oldest first)
+  const validMessages = messages
+    .filter((msg) => {
+      if (!msg || typeof msg !== "object") {
+        console.warn("Invalid message found:", msg);
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      // Sort by created_at timestamp in ascending order (oldest first)
+      try {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateA - dateB;
+      } catch (error) {
+        console.warn("Error sorting messages by date:", error);
+        return 0; // Keep original order if date parsing fails
+      }
+    });
 
   // Handle scroll events for infinite scroll
   useEffect(() => {
@@ -430,6 +478,12 @@ export function MessageList({
     }
   }, [validMessages.length]);
 
+  // Extract last message content for dependency array
+  const lastMessageContent =
+    validMessages.length > 0
+      ? validMessages[validMessages.length - 1]?.message
+      : null;
+
   // Force scroll when the last message content changes during streaming
   useEffect(() => {
     if (!isStreaming || !containerRef.current || validMessages.length === 0)
@@ -451,13 +505,7 @@ export function MessageList({
         }, 100);
       }
     }
-  }, [
-    isStreaming,
-    validMessages,
-    validMessages.length > 0
-      ? validMessages[validMessages.length - 1]?.message
-      : null,
-  ]);
+  }, [isStreaming, validMessages, lastMessageContent]);
 
   // Force scroll when streaming starts
   useEffect(() => {
@@ -598,12 +646,26 @@ export function MessageList({
 
       // Handle both progress updates and progress clearing
       if (event.detail.progress !== undefined) {
+        // Ignore keepalive messages (progress=1) to avoid interfering with real progress
+        if (
+          event.detail.progress === 1 &&
+          event.detail.text?.includes("Processing... (")
+        ) {
+          console.log("🔄 [PROGRESS] Ignoring keepalive message");
+          return;
+        }
+
         setProgress(event.detail.progress);
         // Only set text if it's not null (null means clear the text)
         if (event.detail.text !== null) {
           setProgressText(event.detail.text || "");
         } else {
           setProgressText("");
+        }
+
+        // Reset stopping state when progress is cleared (analysis complete)
+        if (event.detail.progress === null) {
+          setIsStopping(false);
         }
       }
     };
@@ -643,6 +705,7 @@ export function MessageList({
     if (!isThinking) {
       setProgressText("");
       setIsStreaming(false);
+      setIsStopping(false); // Reset stopping state when thinking stops
       // Note: progress state is cleared by the event listener when document-analysis-progress event is dispatched with progress: null
     }
   }, [isThinking]);
@@ -692,6 +755,27 @@ export function MessageList({
     setMemoryNotification((prev) => ({ ...prev, isVisible: false }));
   };
 
+  const handleStopAnalysis = () => {
+    console.log("🔄 [STOP] Stop analysis requested");
+    console.log("🔄 [STOP] Current state:", {
+      progress,
+      isThinking,
+      isStreaming,
+      validMessagesLength: validMessages.length,
+    });
+
+    // Set stopping state
+    setIsStopping(true);
+    setProgressText("Stopping analysis...");
+
+    // Dispatch a custom event that the parent component can listen to
+    window.dispatchEvent(
+      new CustomEvent("stop-analysis", {
+        detail: { timestamp: Date.now() },
+      })
+    );
+  };
+
   return (
     <>
       <div
@@ -722,20 +806,6 @@ export function MessageList({
               !isEmptyMessage;
             const shouldShowProgress =
               isAssistantMessage && isLastMessage && progress !== null;
-
-            // Debug logging for progress display
-            if (isLastMessage && isAssistantMessage) {
-              console.log("🔄 [MESSAGELIST] Progress display debug:", {
-                isLastMessage,
-                isAssistantMessage,
-                isEmptyMessage,
-                isThinking,
-                progress,
-                shouldShowThinking,
-                shouldShowProgress,
-                messageLength: msg.message?.length || 0,
-              });
-            }
 
             return (
               <div
@@ -787,13 +857,50 @@ export function MessageList({
                             {progress}% complete
                           </div>
                           <div css={lightEffectStyle} />
+                          <button
+                            css={stopButtonStyle}
+                            title={isStopping ? "Stopping..." : "Stop analysis"}
+                            onClick={handleStopAnalysis}
+                            disabled={isStopping}
+                          >
+                            {isStopping ? (
+                              <>
+                                <div
+                                  css={css`
+                                    width: 12px;
+                                    height: 12px;
+                                    border: 2px solid rgba(255, 255, 255, 0.3);
+                                    border-top: 2px solid white;
+                                    border-radius: 50%;
+                                    animation: spin 1s linear infinite;
+                                    margin-right: 6px;
+
+                                    @keyframes spin {
+                                      0% {
+                                        transform: rotate(0deg);
+                                      }
+                                      100% {
+                                        transform: rotate(360deg);
+                                      }
+                                    }
+                                  `}
+                                />
+                                Stopping...
+                              </>
+                            ) : (
+                              <>
+                                <FaStop size={12} />
+                                Stop
+                              </>
+                            )}
+                          </button>
                         </div>
                       ) : (
                         <AnimatedThinking />
                       )}
                     </div>
                   ) : typeof msg.message === "string" ? (
-                    <>
+                    <div>
                       {formatMessage(msg.message)}
                       {msg.files && <FileList files={msg.files} />}
                       {shouldShowProgress && (
@@ -809,7 +916,7 @@ export function MessageList({
                             overflow: hidden;
                           `}
                         >
-                          <div>Document Analysis in Progress</div>
+                          <div>Analysis in Progress...</div>
                           <div css={progressBarContainerStyle}>
                             <div
                               css={progressBarStyle}
@@ -826,6 +933,43 @@ export function MessageList({
                             {progress}% complete
                           </div>
                           <div css={lightEffectStyle} />
+                          <button
+                            css={stopButtonStyle}
+                            title={isStopping ? "Stopping..." : "Stop analysis"}
+                            onClick={handleStopAnalysis}
+                            disabled={isStopping}
+                          >
+                            {isStopping ? (
+                              <>
+                                <div
+                                  css={css`
+                                    width: 12px;
+                                    height: 12px;
+                                    border: 2px solid rgba(255, 255, 255, 0.3);
+                                    border-top: 2px solid white;
+                                    border-radius: 50%;
+                                    animation: spin 1s linear infinite;
+                                    margin-right: 6px;
+
+                                    @keyframes spin {
+                                      0% {
+                                        transform: rotate(0deg);
+                                      }
+                                      100% {
+                                        transform: rotate(360deg);
+                                      }
+                                    }
+                                  `}
+                                />
+                                Stopping...
+                              </>
+                            ) : (
+                              <>
+                                <FaStop size={12} />
+                                Stop
+                              </>
+                            )}
+                          </button>
                         </div>
                       )}
                       {msg.user_id === "user" && onAppendToInput && (
@@ -837,7 +981,7 @@ export function MessageList({
                           <FaArrowDown size={8} />
                         </button>
                       )}
-                    </>
+                    </div>
                   ) : (
                     "[Invalid message object]"
                   )}
@@ -871,23 +1015,6 @@ export function MessageList({
                 </span>
               )}
             </p>
-            <button
-              css={css`
-                background: #3b82f6;
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 0.5rem;
-                cursor: pointer;
-                margin-top: 0.5rem;
-
-                &:hover {
-                  background: #2563eb;
-                }
-              `}
-            >
-              Start New Chat
-            </button>
           </div>
         )}
       </div>

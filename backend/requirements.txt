@@ -7,3 +7,5 @@ pydantic
 python-docx
 PyPDF2
 aiofiles
+Pillow
+websockets

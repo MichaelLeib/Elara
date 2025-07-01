@@ -15,12 +15,15 @@ from app.models.schemas import (
     SessionSummary,
     DocumentAnalysisRequest,
     DocumentAnalysisResponse,
+    ImageAnalysisRequest,
+    ImageAnalysisResponse,
 )
 from app.services.ollama_service import ollama_service
 from app.services.summarization_service import summarization_service
 from app.services.context_service import context_service
 from app.services.document_service import document_service
-from app.services.websocket_document_handler import WebSocketDocumentHandler
+from app.services.image_service import image_service
+from app.services.websocket_file_handler import WebSocketFileHandler
 from app.services.user_info_extractor import user_info_extractor
 from app.config.settings import settings
 from app.services.database_service import database_service
@@ -31,9 +34,24 @@ router = APIRouter(prefix="/api", tags=["chat"])
 @router.websocket("/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    print("INFO: connection open")
+
     try:
         while True:
-            data = await websocket.receive_text()
+            # Check if connection is still open before receiving
+            if websocket.client_state.value >= 3:  # WebSocket is closed
+                print("INFO: WebSocket connection closed, exiting loop")
+                break
+
+            try:
+                data = await websocket.receive_text()
+            except (WebSocketDisconnect, RuntimeError) as e:
+                print(f"INFO: WebSocket disconnected during receive: {e}")
+                break
+            except Exception as e:
+                print(f"ERROR: Unexpected error receiving WebSocket data: {e}")
+                break
+
             try:
                 parsed_data = json.loads(data)
                 if isinstance(parsed_data, dict):
@@ -45,7 +63,15 @@ async def websocket_endpoint(websocket: WebSocket):
                     )  # Default to private
                     files = parsed_data.get(
                         "files", None
-                    )  # Document files for analysis
+                    )  # Document and image files for analysis
+
+                    # Handle stop request
+                    if parsed_data.get("type") == "stop":
+                        print("INFO: Received stop request from client")
+                        # Set the stop event if it exists (for file analysis)
+                        if "stop_analysis_event" in locals():
+                            stop_analysis_event.set()
+                        continue
                 else:
                     message = data or ""
                     model = settings.OLLAMA_MODEL
@@ -82,24 +108,73 @@ async def websocket_endpoint(websocket: WebSocket):
                                 "saved_items": saved_items,
                                 "total_saved": user_info_result.get("total_saved", 0),
                             }
-                            await websocket.send_text(json.dumps(memory_notification))
+                            try:
+                                await websocket.send_text(
+                                    json.dumps(memory_notification)
+                                )
+                            except (WebSocketDisconnect, RuntimeError):
+                                print(
+                                    "INFO: WebSocket closed during memory notification"
+                                )
+                                break
 
                     except Exception as extraction_error:
                         print(f"User info extraction failed: {extraction_error}")
                         # Continue with chat even if extraction fails
 
-                # Handle document analysis if files are provided
+                # Handle file analysis if files are provided
                 if files and isinstance(files, list) and len(files) > 0:
-                    # Use the new WebSocket document handler
-                    document_handler = WebSocketDocumentHandler(websocket)
-                    await document_handler.handle_document_analysis(
-                        files=files,
-                        message=message,
-                        model=model,
-                        session_id=session_id,
-                        is_private=is_private,
-                    )
-                    continue  # Skip regular chat processing for document analysis
+                    # Create a stop event for this analysis
+                    stop_analysis_event = asyncio.Event()
+
+                    # Use the new WebSocket file handler
+                    file_handler = WebSocketFileHandler(websocket)
+                    try:
+                        await file_handler.handle_file_analysis(
+                            files=files,
+                            message=message,
+                            model=model,
+                            session_id=session_id,
+                            is_private=is_private,
+                            stop_event=stop_analysis_event,
+                        )
+                    except (WebSocketDisconnect, RuntimeError) as e:
+                        print(f"INFO: WebSocket closed during file analysis: {e}")
+                        break
+                    except Exception as e:
+                        if "stopped by user request" in str(e):
+                            print("INFO: File analysis stopped by user request")
+                            try:
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "error",
+                                            "content": "Analysis stopped by user request",
+                                            "done": True,
+                                        }
+                                    )
+                                )
+                            except (WebSocketDisconnect, RuntimeError):
+                                print("INFO: WebSocket closed during stop notification")
+                                break
+                        else:
+                            print(f"INFO: File analysis error: {e}")
+                            try:
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "error",
+                                            "content": f"Analysis failed: {str(e)}",
+                                            "done": True,
+                                        }
+                                    )
+                                )
+                            except (WebSocketDisconnect, RuntimeError):
+                                print(
+                                    "INFO: WebSocket closed during error notification"
+                                )
+                                break
+                    continue  # Skip regular chat processing for file analysis
 
                 # Regular chat processing (existing code)
                 # Create a session if none provided
@@ -139,17 +214,32 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Stream response from Ollama with context
                 full_response = ""
-                async for chunk in ollama_service.query_ollama_stream(
-                    context, settings.timeout, model
-                ):
-                    full_response += chunk
-                    await websocket.send_text(
-                        json.dumps({"type": "chunk", "content": chunk, "done": False})
-                    )
+                try:
+                    async for chunk in ollama_service.query_ollama_stream(
+                        context, settings.timeout, model
+                    ):
+                        full_response += chunk
+                        try:
+                            await websocket.send_text(
+                                json.dumps(
+                                    {"type": "chunk", "content": chunk, "done": False}
+                                )
+                            )
+                        except (WebSocketDisconnect, RuntimeError):
+                            print("INFO: WebSocket closed during streaming")
+                            break
 
-                await websocket.send_text(
-                    json.dumps({"type": "done", "content": "", "done": True})
-                )
+                    try:
+                        await websocket.send_text(
+                            json.dumps({"type": "done", "content": "", "done": True})
+                        )
+                    except (WebSocketDisconnect, RuntimeError):
+                        print("INFO: WebSocket closed during done message")
+                        break
+
+                except (WebSocketDisconnect, RuntimeError):
+                    print("INFO: WebSocket closed during Ollama streaming")
+                    break
 
                 # Save assistant message to session
                 assistant_message_id = database_service.add_message(
@@ -180,16 +270,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
                     # Send summary to client if confidence is high/medium
                     if summary_data.get("confidence_level") in ["high", "medium"]:
-                        await websocket.send_text(
-                            json.dumps(
-                                {
-                                    "type": "summary",
-                                    "content": summary_data,
-                                    "summary_id": summary_id,
-                                    "done": True,
-                                }
+                        try:
+                            await websocket.send_text(
+                                json.dumps(
+                                    {
+                                        "type": "summary",
+                                        "content": summary_data,
+                                        "summary_id": summary_id,
+                                        "done": True,
+                                    }
+                                )
                             )
-                        )
+                        except (WebSocketDisconnect, RuntimeError):
+                            print("INFO: WebSocket closed during summary send")
+                            break
 
                 except Exception as summary_error:
                     # Log summary error but don't fail the chat
@@ -197,14 +291,23 @@ async def websocket_endpoint(websocket: WebSocket):
 
             except Exception as e:
                 error_message = f"Error: {str(e)}"
-                await websocket.send_text(
-                    json.dumps(
-                        {"type": "error", "content": error_message, "done": True}
+                try:
+                    await websocket.send_text(
+                        json.dumps(
+                            {"type": "error", "content": error_message, "done": True}
+                        )
                     )
-                )
+                except (WebSocketDisconnect, RuntimeError):
+                    # Connection is closed, can't send error message
+                    print("INFO: WebSocket closed during error send")
+                    break
                 print(f"WebSocket error: {e}")
     except WebSocketDisconnect:
-        pass
+        print("INFO: WebSocket client disconnected")
+    except Exception as e:
+        print(f"ERROR: Unexpected WebSocket error: {e}")
+    finally:
+        print("INFO: WebSocket connection closed")
 
 
 @router.get("/chat-history")
@@ -592,11 +695,60 @@ async def analyze_documents_endpoint(request: DocumentAnalysisRequest):
         )
 
 
+@router.post("/analyze-images", response_model=ImageAnalysisResponse)
+async def analyze_images_endpoint(request: ImageAnalysisRequest):
+    """Analyze images with a given prompt"""
+    try:
+        # Validate files
+        if not request.files or len(request.files) == 0:
+            raise HTTPException(status_code=400, detail="No files provided")
+
+        for file_data in request.files:
+            if (
+                not isinstance(file_data, dict)
+                or "filename" not in file_data
+                or "content" not in file_data
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid file format. Each file must have 'filename' and 'content' fields.",
+                )
+
+            # Check if file type is supported
+            if not image_service.is_supported_image(str(file_data["filename"])):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unsupported image type: {file_data['filename']}",
+                )
+
+        # Perform image analysis
+        analysis_result = await image_service.analyze_images(
+            files=request.files, prompt=request.prompt, model=request.model
+        )
+
+        return ImageAnalysisResponse(
+            status=analysis_result["status"],
+            analysis=analysis_result["analysis"],
+            images_processed=analysis_result["images_processed"],
+            method=analysis_result["method"],
+            model_used=analysis_result["model_used"],
+            analysis_strategy=analysis_result["analysis_strategy"],
+            image_details=analysis_result.get("image_details"),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Image analysis failed: {str(e)}")
+
+
 @router.get("/supported-file-types")
 async def get_supported_file_types():
-    """Get list of supported file types for document analysis"""
+    """Get list of supported file types for document and image analysis"""
     return {
         "status": "success",
-        "supported_types": list(document_service.SUPPORTED_EXTENSIONS.keys()),
-        "mime_types": document_service.SUPPORTED_EXTENSIONS,
+        "document_types": list(document_service.SUPPORTED_EXTENSIONS.keys()),
+        "image_types": list(image_service.SUPPORTED_EXTENSIONS.keys()),
+        "document_mime_types": document_service.SUPPORTED_EXTENSIONS,
+        "image_mime_types": image_service.SUPPORTED_EXTENSIONS,
     }

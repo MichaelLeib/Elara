@@ -25,6 +25,7 @@ interface ChatHistoryProps {
     updated_at: string;
     message_count: number;
     model?: string;
+    is_private?: boolean;
   }>;
 }
 
@@ -152,7 +153,7 @@ const chatListStyle = css`
   }
 `;
 
-const chatItemStyle = (isSelected: boolean) => css`
+const chatItemStyle = (isSelected: boolean, isPrivate: boolean = false) => css`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -162,19 +163,29 @@ const chatItemStyle = (isSelected: boolean) => css`
   border-radius: 0.75rem;
   background: ${isSelected
     ? "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)"
+    : isPrivate
+    ? "#e9d5ff"
     : "rgba(255, 255, 255, 0.8)"};
   color: ${isSelected ? "white" : "#1f2937"};
   cursor: pointer;
   transition: box-shadow 0.2s ease;
-  border: 1px solid ${isSelected ? "transparent" : "#e2e8f0"};
+  border: 1px solid
+    ${isSelected ? "transparent" : isPrivate ? "#4c1d95" : "#e2e8f0"};
   backdrop-filter: blur(8px);
 
   @media (prefers-color-scheme: dark) {
     background: ${isSelected
       ? "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)"
+      : isPrivate
+      ? "#4c1d95"
       : "rgba(30, 41, 59, 0.8)"};
     color: ${isSelected ? "white" : "#f1f5f9"};
-    border: 1px solid ${isSelected ? "transparent" : "rgba(255, 255, 255, 0.1)"};
+    border: 1px solid
+      ${isSelected
+        ? "transparent"
+        : isPrivate
+        ? "#4c1d95"
+        : "rgba(255, 255, 255, 0.1)"};
   }
 
   &:hover {
@@ -193,6 +204,12 @@ const chatItemStyle = (isSelected: boolean) => css`
 const chatInfoStyle = css`
   flex: 1;
   min-width: 0;
+`;
+
+const chatTitleContainerStyle = css`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 `;
 
 const chatTitleStyle = css`
@@ -295,6 +312,14 @@ const editInputStyle = css`
   }
 `;
 
+const privateChatIconStyle = css`
+  color: #4c1d95;
+  font-size: 0.75rem;
+  @media (prefers-color-scheme: dark) {
+    color: #e9d5ff;
+  }
+`;
+
 export function ChatHistory({
   onNewChat,
   onNewPrivateChat,
@@ -377,64 +402,84 @@ export function ChatHistory({
             <p>Start a new conversation to see it here</p>
           </div>
         ) : (
-          chatSessions.map((chat) => (
-            <div
-              key={chat.id}
-              css={chatItemStyle(selectedChatIndex === chat.id)}
-              onClick={() => handleChatClick(chat.id)}
-            >
-              <div css={chatInfoStyle}>
-                {editingChatIndex === chat.id ? (
-                  <input
-                    css={editInputStyle}
-                    value={editingTitle}
-                    onChange={(e) => setEditingTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        handleSaveTitle();
-                      } else if (e.key === "Escape") {
-                        handleCancelEdit();
-                      }
-                    }}
-                    onBlur={handleSaveTitle}
-                    autoFocus
-                  />
-                ) : (
-                  <div css={chatTitleStyle}>{chat.title}</div>
+          chatSessions.map((chat) => {
+            console.log("Rendering chat:", {
+              id: chat.id,
+              title: chat.title,
+              is_private: chat.is_private,
+              is_private_type: typeof chat.is_private,
+              is_private_boolean: Boolean(chat.is_private),
+            });
+            return (
+              <div
+                key={chat.id}
+                css={chatItemStyle(
+                  selectedChatIndex === chat.id,
+                  chat.is_private
                 )}
-                <div css={chatMessagesNumberStyle}>
-                  {chat.message_count} messages
+                onClick={() => handleChatClick(chat.id)}
+              >
+                <div css={chatInfoStyle}>
+                  {editingChatIndex === chat.id ? (
+                    <input
+                      css={editInputStyle}
+                      value={editingTitle}
+                      onChange={(e) => setEditingTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleSaveTitle();
+                        } else if (e.key === "Escape") {
+                          handleCancelEdit();
+                        }
+                      }}
+                      onBlur={handleSaveTitle}
+                      autoFocus
+                    />
+                  ) : (
+                    <div css={chatTitleContainerStyle}>
+                      <div css={chatTitleStyle}>{chat.title}</div>
+                      {Boolean(chat.is_private) && (
+                        <FaLock
+                          css={privateChatIconStyle}
+                          size={10}
+                        />
+                      )}
+                    </div>
+                  )}
+                  <div css={chatMessagesNumberStyle}>
+                    {chat.message_count} messages
+                  </div>
+                  {settings?.manual_model_switch && chat.model && (
+                    <div css={chatModelStyle}>{chat.model}</div>
+                  )}
+                  <div css={chatUpdatedAtStyle}>
+                    {dayjs(chat.updated_at).format("MMM D, YYYY HH:mm")}
+                  </div>
                 </div>
-                {settings?.manual_model_switch && chat.model && (
-                  <div css={chatModelStyle}>{chat.model}</div>
-                )}
-                <div css={chatUpdatedAtStyle}>
-                  {dayjs(chat.updated_at).format("MMM D, YYYY HH:mm")}
-                </div>
-              </div>
 
-              <div css={{ display: "flex", alignItems: "center" }}>
-                {editingChatIndex !== chat.id && (
-                  <>
-                    <button
-                      css={chatActionButtonStyle(false)}
-                      onClick={(e) => handleEditClick(e, chat.id, chat.title)}
-                      title="Edit title"
-                    >
-                      <FaPenToSquare size={12} />
-                    </button>
-                    <button
-                      css={chatActionButtonStyle(true)}
-                      onClick={(e) => handleDeleteClick(e, chat.id)}
-                      title="Delete chat"
-                    >
-                      <FaTrash size={14} />
-                    </button>
-                  </>
-                )}
+                <div css={{ display: "flex", alignItems: "center" }}>
+                  {editingChatIndex !== chat.id && (
+                    <>
+                      <button
+                        css={chatActionButtonStyle(false)}
+                        onClick={(e) => handleEditClick(e, chat.id, chat.title)}
+                        title="Edit title"
+                      >
+                        <FaPenToSquare size={12} />
+                      </button>
+                      <button
+                        css={chatActionButtonStyle(true)}
+                        onClick={(e) => handleDeleteClick(e, chat.id)}
+                        title="Delete chat"
+                      >
+                        <FaTrash size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

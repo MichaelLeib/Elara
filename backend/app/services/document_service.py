@@ -35,6 +35,12 @@ class ModelRegistry:
         "qwen2.5-coder:1.5b": 8192,
         "qwen2.5-coder:3b": 8192,
         "gemma:2b": 8192,
+        # Vision models
+        "llava:7b": 8192,
+        "llava:13b": 8192,
+        "llava:34b": 8192,
+        "bakllava:7b": 8192,
+        "llava-llama3.2:8b": 8192,
     }
 
     # Models known to be slower and need more aggressive chunking
@@ -48,6 +54,15 @@ class ModelRegistry:
     SMALL_MODELS = {
         "tinyllama:1.1b",
         "llama3.2:1b",
+    }
+
+    # Vision models that support image analysis
+    VISION_MODELS = {
+        "llava:7b",
+        "llava:13b",
+        "llava:34b",
+        "bakllava:7b",
+        "llava-llama3.2:8b",
     }
 
     # Default context window for unknown models
@@ -101,6 +116,11 @@ class ModelRegistry:
     def is_small_model(cls, model_name: str) -> bool:
         """Check if a model is considered small and needs special handling"""
         return model_name in cls.SMALL_MODELS
+
+    @classmethod
+    def is_vision_model(cls, model_name: str) -> bool:
+        """Check if a model supports vision/image analysis"""
+        return model_name in cls.VISION_MODELS
 
     @classmethod
     async def update_model_info(cls, model_name: str) -> None:
@@ -458,6 +478,7 @@ class DocumentService:
         prompt: str,
         model: Optional[str] = None,
         progress_callback: Optional[Callable[[str, Union[int, float]], None]] = None,
+        stop_event: Optional[asyncio.Event] = None,
     ) -> Dict[str, Any]:
         if model is None:
             model = settings.OLLAMA_MODEL
@@ -498,7 +519,7 @@ class DocumentService:
             )
 
         if progress_callback:
-            progress_callback("Preparing document analysis...", 5)
+            progress_callback("Preparing document analysis...\n", 5)
 
         try:
             # Extract text from all documents
@@ -511,7 +532,7 @@ class DocumentService:
 
                 if progress_callback:
                     progress_callback(
-                        f"Processing file {i+1}/{len(files)}: {filename}",
+                        f"Processing file {i+1}/{len(files)}: {filename}\n",
                         5 + (i / len(files)) * 5,
                     )
 
@@ -534,7 +555,8 @@ class DocumentService:
 
                 if progress_callback:
                     progress_callback(
-                        f"Extracting text from {filename}...", 10 + (i / len(files)) * 5
+                        f"Extracting text from {filename}...\n",
+                        10 + (i / len(files)) * 5,
                     )
 
                 try:
@@ -562,7 +584,7 @@ class DocumentService:
                         )
 
             if progress_callback:
-                progress_callback("Combining document content...", 15)
+                progress_callback("Combining document content...\n", 15)
 
             # Check if any text was extracted
             total_extracted_text = sum(doc["length"] for doc in document_texts)
@@ -599,11 +621,16 @@ class DocumentService:
                 print(f"[DEBUG] Entering chunked analysis branch")
                 if progress_callback:
                     progress_callback(
-                        "Document is large, using chunked analysis...", 20
+                        "Document is large, using chunked analysis...\n", 20
                     )
                 print(f"[DocumentService] Using chunked analysis method.")
                 result = await self._analyze_documents_chunked(
-                    document_texts, prompt, model, file_paths, progress_callback
+                    document_texts,
+                    prompt,
+                    model,
+                    file_paths,
+                    progress_callback,
+                    stop_event,
                 )
                 result.update(
                     {
@@ -621,11 +648,16 @@ class DocumentService:
                 print(f"[DEBUG] Entering direct analysis branch")
                 if progress_callback:
                     progress_callback(
-                        "Document size is manageable, using direct analysis...", 20
+                        "Document size is manageable, using direct analysis...\n", 20
                     )
                 print(f"[DocumentService] Using direct analysis method.")
                 result = await self._analyze_documents_direct(
-                    combined_text, prompt, model, file_paths, progress_callback
+                    combined_text,
+                    prompt,
+                    model,
+                    file_paths,
+                    progress_callback,
+                    stop_event,
                 )
                 result.update(
                     {
@@ -682,10 +714,11 @@ Provide a clear, concise analysis addressing the question directly."""
         model: str,
         file_paths: List[str],
         progress_callback: Optional[Callable[[str, Union[int, float]], None]] = None,
+        stop_event: Optional[asyncio.Event] = None,
     ) -> Dict[str, Any]:
         try:
             if progress_callback:
-                progress_callback("Preparing AI model request...", 25)
+                progress_callback("Preparing AI model request...\n", 25)
 
             timeout = self.calculate_timeout(
                 len(combined_text), is_chunked=False, model_name=model
@@ -695,11 +728,11 @@ Provide a clear, concise analysis addressing the question directly."""
             )
 
             if progress_callback:
-                progress_callback(f"Analyzing document with {model}...", 30)
+                progress_callback(f"Analyzing document with {model}...\n", 30)
 
             # Add a progress update during analysis to show it's working
             if progress_callback:
-                progress_callback(f"Processing document content with {model}...", 50)
+                progress_callback(f"Processing document content with {model}...\n", 50)
 
             # Use optimized prompt for the model
             prompt_template = self._get_optimized_prompt(prompt, model, is_chunk=False)
@@ -769,10 +802,11 @@ Provide a clear, concise analysis addressing the question directly."""
         model: str,
         file_paths: List[str],
         progress_callback: Optional[Callable[[str, Union[int, float]], None]] = None,
+        stop_event: Optional[asyncio.Event] = None,
     ) -> Dict[str, Any]:
         try:
             if progress_callback:
-                progress_callback("Preparing document chunks...", 25)
+                progress_callback("Preparing document chunks...\n", 25)
 
             all_chunks = []
             for doc in document_texts:
@@ -789,7 +823,7 @@ Provide a clear, concise analysis addressing the question directly."""
             )
 
             if progress_callback:
-                progress_callback(f"Split document into {len(all_chunks)} chunks", 30)
+                progress_callback(f"Split document into {len(all_chunks)} chunks\n", 30)
 
             chunk_analyses = []
 
@@ -808,17 +842,51 @@ Provide a clear, concise analysis addressing the question directly."""
             # Add initial progress update for large files
             if total_chunks > 10 and progress_callback:
                 progress_callback(
-                    f"Starting analysis of {total_chunks} document chunks...",
+                    f"Starting analysis of {total_chunks} document chunks...\n",
                     int(progress_start + 1),
                 )
                 # Small delay to ensure progress is visible
                 await asyncio.sleep(0.1)
 
             for i, chunk in enumerate(all_chunks):
+                # Check if analysis should be stopped
+                if stop_event and stop_event.is_set():
+                    print("[DocumentService] Analysis stopped by user request")
+
+                    # Return partial results if we have any
+                    if chunk_analyses:
+                        print(
+                            f"[DocumentService] Returning partial results from {len(chunk_analyses)} chunks"
+                        )
+                        combined_analyses = "\n\n".join(
+                            [
+                                f"From {analysis['filename']} (Chunk {analysis['chunk_index'] + 1}):\n{analysis['analysis']}"
+                                for analysis in chunk_analyses
+                            ]
+                        )
+
+                        return {
+                            "status": "partial",
+                            "analysis": f"Analysis was stopped by the user after processing {len(chunk_analyses)} out of {total_chunks} chunks.\n\nPartial analysis results:\n\n{combined_analyses}",
+                            "documents_processed": len(document_texts),
+                            "chunks_analyzed": len(chunk_analyses),
+                            "total_chunks": total_chunks,
+                            "method": "chunked_partial",
+                            "timeout_per_chunk": timeout_per_chunk,
+                        }
+                    else:
+                        raise Exception("Analysis stopped by user request")
+
+                # Add debugging for stop event checking
+                if stop_event:
+                    print(
+                        f"[DocumentService] [Chunked] Processing chunk {i+1}/{total_chunks}, stop_event.is_set(): {stop_event.is_set()}"
+                    )
+
                 if progress_callback:
                     progress = progress_start + (i * progress_per_chunk)
                     progress_callback(
-                        f"Analyzing chunk {i+1}/{total_chunks} ({chunk['filename']})...",
+                        f"Analyzing chunk {i+1}/{total_chunks} ({chunk['filename']})...\n",
                         int(progress),
                     )
 
@@ -845,7 +913,7 @@ Provide a clear, concise analysis addressing the question directly."""
                         + (progress_per_chunk * 0.3)
                     )
                     progress_callback(
-                        f"Processing chunk {i+1}/{total_chunks} with AI...",
+                        f"Processing chunk {i+1}/{total_chunks} with AI...\n",
                         int(mid_progress),
                     )
                     # Small delay to ensure progress is visible
@@ -906,7 +974,7 @@ Provide a clear, concise analysis addressing the question directly."""
                     )
 
             if progress_callback:
-                progress_callback("Combining chunk analyses...", 85)
+                progress_callback("Combining chunk analyses...\n", 85)
 
             combined_analyses = "\n\n".join(
                 [
@@ -919,7 +987,7 @@ Provide a clear, concise analysis addressing the question directly."""
             )
 
             if progress_callback:
-                progress_callback(f"Synthesizing final analysis with {model}...", 90)
+                progress_callback(f"Synthesizing final analysis with {model}...\n", 90)
 
             # Use optimized final prompt for small models
             if ModelRegistry.is_small_model(model):
@@ -973,7 +1041,7 @@ Provide a coherent, comprehensive answer:"""
                         final_analysis = f"[Final analysis synthesis failed - the model was unable to process the combined analysis. Here are the individual chunk analyses:\n\n{combined_analyses}]"
 
             if progress_callback:
-                progress_callback("Analysis completed successfully", 100)
+                progress_callback("Analysis completed successfully\n", 100)
 
             return {
                 "status": "success",
@@ -1064,7 +1132,7 @@ Provide a coherent, comprehensive answer:"""
             chunk_progress *= 1.05  # 5% extra for potential retries
 
         # Calculate start and end points - start from 30% (after file processing)
-        progress_start = 30
+        progress_start = 10
 
         # Ensure we don't exceed 85% to leave room for final synthesis (85-100%)
         max_progress_end = 85

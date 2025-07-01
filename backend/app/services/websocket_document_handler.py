@@ -227,13 +227,13 @@ class WebSocketDocumentHandler:
 
             # Initial status
             await self.send_status(
-                "Starting document analysis (this may take a while)... ", 5
+                "Starting document analysis (this may take a while)... \n", 5
             )
 
             # Validate files
             await self.send_status("Validating uploaded files...", 10)
             self.validate_files(files)
-            await self.send_status("Files validated successfully! ", 15)
+            await self.send_status("Files validated successfully!\n", 15)
 
             # Perform document analysis with streaming
             await self.send_status("Extracting text from documents...", 20)

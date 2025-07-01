@@ -44,5 +44,59 @@
     "weaknesses": ["Higher memory usage", "Slower responses"],
     "best_for": ["Complex reasoning", "Document analysis", "Code assistance"],
     "recommended_for": "High-end hardware (8-16GB RAM, 8+ cores)"
+  },
+  {
+    "name": "llava:7b",
+    "description": "Multimodal model that can understand and analyze images alongside text.",
+    "strengths": [
+      "Image analysis",
+      "Visual understanding",
+      "Text and image comprehension",
+      "Good reasoning"
+    ],
+    "weaknesses": ["Higher memory usage", "Slower than text-only models"],
+    "best_for": [
+      "Image analysis",
+      "Visual question answering",
+      "Document analysis with images",
+      "Mixed content understanding"
+    ],
+    "recommended_for": "High-end hardware (8-16GB RAM, 8+ cores)"
+  },
+  {
+    "name": "llava:13b",
+    "description": "Larger multimodal model with enhanced image understanding and reasoning capabilities.",
+    "strengths": [
+      "Superior image analysis",
+      "Enhanced visual reasoning",
+      "Better text comprehension",
+      "Strong multimodal capabilities"
+    ],
+    "weaknesses": ["High memory usage", "Slower processing"],
+    "best_for": [
+      "Complex image analysis",
+      "Detailed visual reasoning",
+      "Advanced multimodal tasks",
+      "Professional image understanding"
+    ],
+    "recommended_for": "Workstation hardware (16GB+ RAM, 8+ cores)"
+  },
+  {
+    "name": "bakllava:7b",
+    "description": "Alternative multimodal model with good image understanding and conversation abilities.",
+    "strengths": [
+      "Image analysis",
+      "Good conversation quality",
+      "Balanced performance",
+      "Multimodal understanding"
+    ],
+    "weaknesses": ["Moderate resource usage", "Slower than text-only models"],
+    "best_for": [
+      "Image analysis",
+      "Visual conversations",
+      "Mixed content processing",
+      "General multimodal tasks"
+    ],
+    "recommended_for": "High-end hardware (8-16GB RAM, 8+ cores)"
   }
 ]
