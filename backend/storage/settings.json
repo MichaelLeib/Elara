@@ -3,7 +3,7 @@
     "OLLAMA_URL": "http://localhost:11434/api/generate",
     "OLLAMA_MODEL": "phi3:mini"
   },
-  "timeout": 30,
+  "timeout": 300,
   "document": {
     "TIMEOUT": 600
   },
@@ -15,5 +15,10 @@
     "MESSAGE_OFFSET": 0
   },
   "manual_model_switch": true,
-  "summarization_prompt": "Analyze this conversation and provide insights:\n\nUser: {user_message}\nAssistant: {assistant_message}\n\nFocus on:\n- Technical issues mentioned\n- Solutions provided\n- Next steps for the user\n\nReturn as JSON with: key_insights, action_items, context_notes, conversation_summary, confidence_level, topics"
+  "summarization_prompt": "Analyze this conversation and provide insights:\n\nUser: {user_message}\nAssistant: {assistant_message}\n\nFocus on:\n- Technical issues mentioned\n- Solutions provided\n- Next steps for the user\n\nReturn as JSON with: key_insights, action_items, context_notes, conversation_summary, confidence_level, topics",
+  "web_search": {
+    "ENABLED": true,
+    "ENGINE": "duckduckgo",
+    "SERPER_API_KEY": ""
+  }
 }

@@ -14,6 +14,8 @@ import { AnimatedProgressText } from "./DocAnalysisProgress.tsx";
 import { FileList } from "./FileList.tsx";
 import { AnimatedThinking } from "./AnimatedThinking.tsx";
 import { MemoryNotification } from "./MemoryNotification.tsx";
+import SourcePills from "../UI/SourcePills";
+import WebSearchAnimation from "./WebSearchAnimation";
 
 interface MessageListProps extends OriginalMessageListProps {
   onAppendToInput?: (text: string) => void;
@@ -261,6 +263,12 @@ export function MessageList({
     savedItems: [],
   });
   const [isStopping, setIsStopping] = useState(false);
+  const [webSearchStatus, setWebSearchStatus] = useState<{
+    isSearching: boolean;
+    searchTerms?: string;
+  }>({
+    isSearching: false,
+  });
   const isAutoScrollingRef = useRef(false);
 
   // Filter out any invalid messages and sort in chronological order (oldest first)
@@ -706,6 +714,7 @@ export function MessageList({
       setProgressText("");
       setIsStreaming(false);
       setIsStopping(false); // Reset stopping state when thinking stops
+      setWebSearchStatus({ isSearching: false }); // Clear web search status when thinking stops
       // Note: progress state is cleared by the event listener when document-analysis-progress event is dispatched with progress: null
     }
   }, [isThinking]);
@@ -724,6 +733,35 @@ export function MessageList({
       window.removeEventListener(
         "message-streaming",
         handleStreamingUpdate as EventListener
+      );
+    };
+  }, []);
+
+  // Handle web search notifications
+  useEffect(() => {
+    const handleWebSearch = (event: CustomEvent) => {
+      const { search_terms, done } = event.detail;
+
+      if (done) {
+        // Web search completed
+        setWebSearchStatus({ isSearching: false });
+      } else {
+        // Web search started
+        setWebSearchStatus({
+          isSearching: true,
+          searchTerms: search_terms,
+        });
+      }
+    };
+
+    window.addEventListener(
+      "web-search-performed",
+      handleWebSearch as EventListener
+    );
+    return () => {
+      window.removeEventListener(
+        "web-search-performed",
+        handleWebSearch as EventListener
       );
     };
   }, []);
@@ -793,202 +831,218 @@ export function MessageList({
         )}
 
         {validMessages.length > 0 ? (
-          validMessages.map((msg, index) => {
-            const isLastMessage = index === validMessages.length - 1;
-            const isAssistantMessage = msg.user_id === "assistant";
-            const isEmptyMessage = msg.message === "";
-            const shouldShowThinking =
-              isEmptyMessage && isThinking && isLastMessage;
-            const shouldShowStreaming =
-              isAssistantMessage &&
-              isStreaming &&
-              isLastMessage &&
-              !isEmptyMessage;
-            const shouldShowProgress =
-              isAssistantMessage && isLastMessage && progress !== null;
+          <>
+            {webSearchStatus.isSearching && (
+              <WebSearchAnimation
+                searchTerms={webSearchStatus.searchTerms}
+                css={assistantMessageStyle}
+              />
+            )}
+            {validMessages.map((msg, index) => {
+              const isLastMessage = index === validMessages.length - 1;
+              const isAssistantMessage = msg.user_id === "assistant";
+              const isEmptyMessage = msg.message === "";
+              const shouldShowThinking =
+                isEmptyMessage && isThinking && isLastMessage;
+              const shouldShowStreaming =
+                isAssistantMessage &&
+                isStreaming &&
+                isLastMessage &&
+                !isEmptyMessage;
+              const shouldShowProgress =
+                isAssistantMessage && isLastMessage && progress !== null;
 
-            return (
-              <div
-                key={index}
-                css={
-                  msg.user_id === "user"
-                    ? userMessageStyle
-                    : shouldShowStreaming
-                    ? streamingStyle
-                    : assistantMessageStyle
-                }
-              >
-                <div css={messageTimestampStyle()}>
-                  {dayjs(msg.created_at).format("ddd, MMM D • HH:mm")}
-                </div>
-                {msg.user_id === "assistant" && (
-                  <div css={messageModelStyle()}>
-                    {typeof msg.model === "string"
-                      ? msg.model
-                      : typeof msg.model === "object" && msg.model
-                      ? msg.model.name || "[Unknown Model]"
-                      : "[Invalid model]"}
-                  </div>
-                )}
+              return (
                 <div
-                  css={messageBubbleStyle(msg.user_id === "user")}
-                  style={{ position: "relative" }}
+                  key={index}
+                  css={
+                    msg.user_id === "user"
+                      ? userMessageStyle
+                      : shouldShowStreaming
+                      ? streamingStyle
+                      : assistantMessageStyle
+                  }
                 >
-                  {shouldShowThinking ? (
-                    <div css={thinkingStyle}>
-                      {progress !== null ? (
-                        <div
-                          style={{ position: "relative", overflow: "hidden" }}
-                        >
-                          <div>Document Analysis in Progress...</div>
-                          <div css={progressBarContainerStyle}>
-                            <div
-                              css={progressBarStyle}
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                          {progressText && (
-                            <AnimatedProgressText
-                              key={progressText}
-                              text={progressText}
-                            />
-                          )}
-                          <div css={progressTextStyle}>
-                            {progress}% complete
-                          </div>
-                          <div css={lightEffectStyle} />
-                          <button
-                            css={stopButtonStyle}
-                            title={isStopping ? "Stopping..." : "Stop analysis"}
-                            onClick={handleStopAnalysis}
-                            disabled={isStopping}
-                          >
-                            {isStopping ? (
-                              <>
-                                <div
-                                  css={css`
-                                    width: 12px;
-                                    height: 12px;
-                                    border: 2px solid rgba(255, 255, 255, 0.3);
-                                    border-top: 2px solid white;
-                                    border-radius: 50%;
-                                    animation: spin 1s linear infinite;
-                                    margin-right: 6px;
-
-                                    @keyframes spin {
-                                      0% {
-                                        transform: rotate(0deg);
-                                      }
-                                      100% {
-                                        transform: rotate(360deg);
-                                      }
-                                    }
-                                  `}
-                                />
-                                Stopping...
-                              </>
-                            ) : (
-                              <>
-                                <FaStop size={12} />
-                                Stop
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      ) : (
-                        <AnimatedThinking />
-                      )}
+                  <div css={messageTimestampStyle()}>
+                    {dayjs(msg.created_at).format("ddd, MMM D • HH:mm")}
+                  </div>
+                  {msg.user_id === "assistant" && (
+                    <div css={messageModelStyle()}>
+                      {typeof msg.model === "string"
+                        ? msg.model
+                        : typeof msg.model === "object" && msg.model
+                        ? msg.model.name || "[Unknown Model]"
+                        : "[Invalid model]"}
                     </div>
-                  ) : typeof msg.message === "string" ? (
-                    <div>
-                      {formatMessage(msg.message)}
-                      {msg.files && <FileList files={msg.files} />}
-                      {shouldShowProgress && (
-                        <div
-                          css={css`
-                            margin-top: 1rem;
-                            padding: 0.75rem;
-                            background: rgba(59, 130, 246, 0.1);
-                            border-radius: 0.5rem;
-                            border: 1px solid rgba(59, 130, 246, 0.2);
-                            height: 100%;
-                            position: relative;
-                            overflow: hidden;
-                          `}
-                        >
-                          <div>Analysis in Progress...</div>
-                          <div css={progressBarContainerStyle}>
-                            <div
-                              css={progressBarStyle}
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                          {progressText && (
-                            <AnimatedProgressText
-                              key={progressText}
-                              text={progressText}
-                            />
-                          )}
-                          <div css={progressTextStyle}>
-                            {progress}% complete
-                          </div>
-                          <div css={lightEffectStyle} />
-                          <button
-                            css={stopButtonStyle}
-                            title={isStopping ? "Stopping..." : "Stop analysis"}
-                            onClick={handleStopAnalysis}
-                            disabled={isStopping}
-                          >
-                            {isStopping ? (
-                              <>
-                                <div
-                                  css={css`
-                                    width: 12px;
-                                    height: 12px;
-                                    border: 2px solid rgba(255, 255, 255, 0.3);
-                                    border-top: 2px solid white;
-                                    border-radius: 50%;
-                                    animation: spin 1s linear infinite;
-                                    margin-right: 6px;
-
-                                    @keyframes spin {
-                                      0% {
-                                        transform: rotate(0deg);
-                                      }
-                                      100% {
-                                        transform: rotate(360deg);
-                                      }
-                                    }
-                                  `}
-                                />
-                                Stopping...
-                              </>
-                            ) : (
-                              <>
-                                <FaStop size={12} />
-                                Stop
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      )}
-                      {msg.user_id === "user" && onAppendToInput && (
-                        <button
-                          css={enterButtonStyle}
-                          title="Copy to input"
-                          onClick={() => onAppendToInput(msg.message)}
-                        >
-                          <FaArrowDown size={8} />
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    "[Invalid message object]"
                   )}
+                  <div
+                    css={messageBubbleStyle(msg.user_id === "user")}
+                    style={{ position: "relative" }}
+                  >
+                    {shouldShowThinking ? (
+                      <div css={thinkingStyle}>
+                        {progress !== null ? (
+                          <div
+                            style={{ position: "relative", overflow: "hidden" }}
+                          >
+                            <div>Document Analysis in Progress...</div>
+                            <div css={progressBarContainerStyle}>
+                              <div
+                                css={progressBarStyle}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            {progressText && (
+                              <AnimatedProgressText
+                                key={progressText}
+                                text={progressText}
+                              />
+                            )}
+                            <div css={progressTextStyle}>
+                              {progress}% complete
+                            </div>
+                            <div css={lightEffectStyle} />
+                            <button
+                              css={stopButtonStyle}
+                              title={
+                                isStopping ? "Stopping..." : "Stop analysis"
+                              }
+                              onClick={handleStopAnalysis}
+                              disabled={isStopping}
+                            >
+                              {isStopping ? (
+                                <>
+                                  <div
+                                    css={css`
+                                      width: 12px;
+                                      height: 12px;
+                                      border: 2px solid rgba(255, 255, 255, 0.3);
+                                      border-top: 2px solid white;
+                                      border-radius: 50%;
+                                      animation: spin 1s linear infinite;
+                                      margin-right: 6px;
+
+                                      @keyframes spin {
+                                        0% {
+                                          transform: rotate(0deg);
+                                        }
+                                        100% {
+                                          transform: rotate(360deg);
+                                        }
+                                      }
+                                    `}
+                                  />
+                                  Stopping...
+                                </>
+                              ) : (
+                                <>
+                                  <FaStop size={12} />
+                                  Stop
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <AnimatedThinking />
+                        )}
+                      </div>
+                    ) : typeof msg.message === "string" ? (
+                      <div>
+                        {formatMessage(msg.message)}
+                        {msg.files && <FileList files={msg.files} />}
+                        {msg.web_search_sources &&
+                          msg.web_search_sources.length > 0 && (
+                            <SourcePills sources={msg.web_search_sources} />
+                          )}
+                        {shouldShowProgress && (
+                          <div
+                            css={css`
+                              margin-top: 1rem;
+                              padding: 0.75rem;
+                              background: rgba(59, 130, 246, 0.1);
+                              border-radius: 0.5rem;
+                              border: 1px solid rgba(59, 130, 246, 0.2);
+                              height: 100%;
+                              position: relative;
+                              overflow: hidden;
+                            `}
+                          >
+                            <div>Analysis in Progress...</div>
+                            <div css={progressBarContainerStyle}>
+                              <div
+                                css={progressBarStyle}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            {progressText && (
+                              <AnimatedProgressText
+                                key={progressText}
+                                text={progressText}
+                              />
+                            )}
+                            <div css={progressTextStyle}>
+                              {progress}% complete
+                            </div>
+                            <div css={lightEffectStyle} />
+                            <button
+                              css={stopButtonStyle}
+                              title={
+                                isStopping ? "Stopping..." : "Stop analysis"
+                              }
+                              onClick={handleStopAnalysis}
+                              disabled={isStopping}
+                            >
+                              {isStopping ? (
+                                <>
+                                  <div
+                                    css={css`
+                                      width: 12px;
+                                      height: 12px;
+                                      border: 2px solid rgba(255, 255, 255, 0.3);
+                                      border-top: 2px solid white;
+                                      border-radius: 50%;
+                                      animation: spin 1s linear infinite;
+                                      margin-right: 6px;
+
+                                      @keyframes spin {
+                                        0% {
+                                          transform: rotate(0deg);
+                                        }
+                                        100% {
+                                          transform: rotate(360deg);
+                                        }
+                                      }
+                                    `}
+                                  />
+                                  Stopping...
+                                </>
+                              ) : (
+                                <>
+                                  <FaStop size={12} />
+                                  Stop
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+                        {msg.user_id === "user" && onAppendToInput && (
+                          <button
+                            css={enterButtonStyle}
+                            title="Copy to input"
+                            onClick={() => onAppendToInput(msg.message)}
+                          >
+                            <FaArrowDown size={8} />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      "[Invalid message object]"
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </>
         ) : (
           <div css={assistantMessageStyle}>
             <p>

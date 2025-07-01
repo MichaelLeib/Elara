@@ -16,6 +16,9 @@ class Settings:
         self._message_offset: int = 0
         self._manual_model_switch: bool = False
         self._summarization_prompt: str = ""
+        self._serper_api_key: Optional[str] = None
+        self._web_search_enabled: bool = True
+        self._web_search_engine: str = "duckduckgo"
         self._load_settings()
 
     def _load_settings(self):
@@ -39,6 +42,10 @@ class Settings:
             image_settings = settings.get("image", {})
             self._image_timeout = image_settings.get("IMAGE_TIMEOUT")
             self._image_prompt = image_settings.get("IMAGE_PROMPT")
+            web_search_settings = settings.get("web_search", {})
+            self._serper_api_key = web_search_settings.get("SERPER_API_KEY")
+            self._web_search_enabled = web_search_settings.get("ENABLED", True)
+            self._web_search_engine = web_search_settings.get("ENGINE", "duckduckgo")
         except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
             print(f"Warning: Could not load settings.json: {e}")
             print("Using default settings...")
@@ -78,6 +85,18 @@ class Settings:
     @property
     def summarization_prompt(self) -> str:
         return self._summarization_prompt
+
+    @property
+    def SERPER_API_KEY(self) -> Optional[str]:
+        return self._serper_api_key
+
+    @property
+    def web_search_enabled(self) -> bool:
+        return self._web_search_enabled
+
+    @property
+    def web_search_engine(self) -> str:
+        return self._web_search_engine
 
     def update_settings(
         self,

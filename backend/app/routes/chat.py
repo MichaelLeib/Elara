@@ -25,6 +25,7 @@ from app.services.document_service import document_service
 from app.services.image_service import image_service
 from app.services.websocket_file_handler import WebSocketFileHandler
 from app.services.user_info_extractor import user_info_extractor
+from app.services.web_search_service import web_search_service
 from app.config.settings import settings
 from app.services.database_service import database_service
 
@@ -122,6 +123,96 @@ async def websocket_endpoint(websocket: WebSocket):
                         print(f"User info extraction failed: {extraction_error}")
                         # Continue with chat even if extraction fails
 
+                # Check if web search is needed
+                web_search_result = None
+                web_search_sources = []
+                if settings.web_search_enabled and message.strip():
+                    try:
+                        # Determine if web search is needed
+                        search_decision = (
+                            await web_search_service.should_perform_web_search(
+                                message=message, context=""
+                            )
+                        )
+
+                        if search_decision.get("should_search", False):
+                            print(
+                                f"Web search needed: {search_decision.get('reason', 'Unknown')}"
+                            )
+
+                            # Perform web search
+                            search_terms = search_decision.get("search_terms", message)
+                            search_results = (
+                                await web_search_service.perform_web_search(
+                                    query=search_terms,
+                                    engine=settings.web_search_engine,
+                                )
+                            )
+                            web_search_result = (
+                                web_search_service.format_search_results(search_results)
+                            )
+                            web_search_sources = (
+                                web_search_service.extract_sources_from_results(
+                                    search_results
+                                )
+                            )
+
+                            # Send web search notification with sources
+                            try:
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "web_search",
+                                            "content": f"Performing web search for: {search_terms}",
+                                            "search_terms": search_terms,
+                                            "confidence": search_decision.get(
+                                                "confidence", "low"
+                                            ),
+                                            "reason": search_decision.get(
+                                                "reason", "Unknown"
+                                            ),
+                                            "sources": web_search_sources,
+                                            "done": False,
+                                        }
+                                    )
+                                )
+                            except (WebSocketDisconnect, RuntimeError):
+                                print(
+                                    "INFO: WebSocket closed during web search notification"
+                                )
+                                break
+
+                            print(
+                                f"Web search completed, found {len(web_search_result.split())} characters of results"
+                            )
+
+                            # Send web search completion notification
+                            try:
+                                await websocket.send_text(
+                                    json.dumps(
+                                        {
+                                            "type": "web_search",
+                                            "content": f"Web search completed for: {search_terms}",
+                                            "search_terms": search_terms,
+                                            "sources": web_search_sources,
+                                            "done": True,
+                                        }
+                                    )
+                                )
+                            except (WebSocketDisconnect, RuntimeError):
+                                print(
+                                    "INFO: WebSocket closed during web search completion notification"
+                                )
+                                break
+                        else:
+                            print(
+                                f"No web search needed: {search_decision.get('reason', 'Unknown')}"
+                            )
+
+                    except Exception as search_error:
+                        print(f"Web search failed: {search_error}")
+                        # Continue with chat even if web search fails
+
                 # Handle file analysis if files are provided
                 if files and isinstance(files, list) and len(files) > 0:
                     # Create a stop event for this analysis
@@ -212,11 +303,35 @@ async def websocket_endpoint(websocket: WebSocket):
                         session_id, message
                     )
 
+                # Add web search results to context if available
+                if web_search_result:
+                    # Add system prompt to instruct the model to summarize web search results
+                    web_search_prompt = f"""Answer using these search results:
+
+{web_search_result}
+
+Q: {message}
+A:"""
+
+                    context = web_search_prompt
+                    print(
+                        "Web search results added to context with summarization prompt"
+                    )
+
                 # Stream response from Ollama with context
+                # Use longer timeout for larger models
+                model_timeout = settings.timeout
+                if "llama3" in model.lower() or "llama" in model.lower():
+                    model_timeout = 600  # 10 minutes for Llama models
+                elif "phi3" in model.lower():
+                    model_timeout = 300  # 5 minutes for Phi models
+                elif "tiny" in model.lower():
+                    model_timeout = 120  # 2 minutes for tiny models
+
                 full_response = ""
                 try:
                     async for chunk in ollama_service.query_ollama_stream(
-                        context, settings.timeout, model
+                        context, model_timeout, model
                     ):
                         full_response += chunk
                         try:
@@ -434,6 +549,45 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
                 print(f"User info extraction failed: {extraction_error}")
                 # Continue with chat even if extraction fails
 
+        # Check if web search is needed
+        web_search_result = None
+        web_search_sources = []
+        if settings.web_search_enabled and request.message.strip():
+            try:
+                # Determine if web search is needed
+                search_decision = await web_search_service.should_perform_web_search(
+                    message=request.message, context=""
+                )
+
+                if search_decision.get("should_search", False):
+                    print(
+                        f"Web search needed: {search_decision.get('reason', 'Unknown')}"
+                    )
+
+                    # Perform web search
+                    search_terms = search_decision.get("search_terms", request.message)
+                    search_results = await web_search_service.perform_web_search(
+                        query=search_terms, engine=settings.web_search_engine
+                    )
+                    web_search_result = web_search_service.format_search_results(
+                        search_results
+                    )
+                    web_search_sources = (
+                        web_search_service.extract_sources_from_results(search_results)
+                    )
+
+                    print(
+                        f"Web search completed, found {len(web_search_result.split())} characters of results"
+                    )
+                else:
+                    print(
+                        f"No web search needed: {search_decision.get('reason', 'Unknown')}"
+                    )
+
+            except Exception as search_error:
+                print(f"Web search failed: {search_error}")
+                # Continue with chat even if web search fails
+
         # Convert FileInfo objects to dict for database storage
         files_data = None
         if request.files:
@@ -460,8 +614,32 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
                 session_id, request.message
             )
 
+        # Add web search results to context if available
+        if web_search_result:
+            # Add system prompt to instruct the model to summarize web search results
+            web_search_prompt = f"""Answer using these search results:
+
+{web_search_result}
+
+Q: {request.message}
+A:"""
+
+            context = web_search_prompt
+            print("Web search results added to context with summarization prompt")
+
         # Get AI response with context
-        ai_response = await ollama_service.query_ollama(context, 30.0, request.model)
+        # Use longer timeout for larger models
+        model_timeout = settings.timeout
+        if "llama3" in request.model.lower() or "llama" in request.model.lower():
+            model_timeout = 600  # 10 minutes for Llama models
+        elif "phi3" in request.model.lower():
+            model_timeout = 300  # 5 minutes for Phi models
+        elif "tiny" in request.model.lower():
+            model_timeout = 120  # 2 minutes for tiny models
+
+        ai_response = await ollama_service.query_ollama(
+            context, model_timeout, request.model
+        )
 
         # Add AI response
         assistant_message_id = database_service.add_message(
@@ -501,6 +679,29 @@ async def send_message_to_chat_session(session_id: str, request: ChatMessageRequ
             "summary_id": summary_id,
             "is_private": is_private,
             "user_info_extraction": user_info_result,
+            "web_search": (
+                {
+                    "performed": web_search_result is not None,
+                    "search_terms": (
+                        search_decision.get("search_terms")
+                        if "search_decision" in locals()
+                        else None
+                    ),
+                    "confidence": (
+                        search_decision.get("confidence")
+                        if "search_decision" in locals()
+                        else None
+                    ),
+                    "reason": (
+                        search_decision.get("reason")
+                        if "search_decision" in locals()
+                        else None
+                    ),
+                    "sources": web_search_sources,
+                }
+                if "search_decision" in locals()
+                else {"performed": False, "sources": []}
+            ),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send message: {str(e)}")
@@ -752,3 +953,67 @@ async def get_supported_file_types():
         "document_mime_types": document_service.SUPPORTED_EXTENSIONS,
         "image_mime_types": image_service.SUPPORTED_EXTENSIONS,
     }
+
+
+@router.post("/web-search")
+async def perform_web_search(query: str, engine: str = "duckduckgo"):
+    """Perform a web search manually"""
+    try:
+        if not settings.web_search_enabled:
+            raise HTTPException(status_code=400, detail="Web search is disabled")
+
+        # Perform the search
+        search_results = await web_search_service.perform_web_search(query, engine)
+
+        if search_results.get("status") == "success":
+            return {
+                "status": "success",
+                "query": query,
+                "engine": engine,
+                "results": search_results.get("results", []),
+                "total_results": search_results.get("total_results", 0),
+                "formatted_results": web_search_service.format_search_results(
+                    search_results
+                ),
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Web search failed: {search_results.get('error', 'Unknown error')}",
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Web search failed: {str(e)}")
+
+
+@router.post("/web-search/check")
+async def check_web_search_needed(message: str, context: str = ""):
+    """Check if a web search is needed for a given message"""
+    try:
+        if not settings.web_search_enabled:
+            return {
+                "status": "success",
+                "should_search": False,
+                "reason": "Web search is disabled",
+                "confidence": "low",
+            }
+
+        # Determine if web search is needed
+        search_decision = await web_search_service.should_perform_web_search(
+            message, context
+        )
+
+        return {
+            "status": "success",
+            "should_search": search_decision.get("should_search", False),
+            "confidence": search_decision.get("confidence", "low"),
+            "reason": search_decision.get("reason", "Unknown"),
+            "search_terms": search_decision.get("search_terms"),
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to check web search need: {str(e)}"
+        )

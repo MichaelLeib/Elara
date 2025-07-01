@@ -5,6 +5,14 @@ export type FileInfo = {
   content?: string;
 };
 
+export type WebSearchSource = {
+  title: string;
+  url: string;
+  snippet: string;
+  favicon_url: string;
+  domain: string;
+};
+
 export type Message = {
   created_at: string;
   id: string;
@@ -13,6 +21,7 @@ export type Message = {
   updated_at: string;
   user_id: string;
   files?: FileInfo[];
+  web_search_sources?: WebSearchSource[];
 };
 
 export type MessageListProps = {

@@ -1,6 +1,6 @@
 /** @jsxImportSource @emotion/react */
 import { css } from "@emotion/react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import "./App.css";
 import { Chat } from "./components/Chat/Chat";
 import { SidePane } from "./components/SidePane/SidePane";
@@ -144,6 +144,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const currentAssistantMessageIdRef = useRef<string | null>(null);
 
   const { settings } = useSettings();
 
@@ -307,6 +308,7 @@ function App() {
 
     // Add assistant message placeholder
     const assistantMessageId = Date.now().toString();
+    currentAssistantMessageIdRef.current = assistantMessageId;
     const assistantMessage: Message = {
       user_id: "assistant",
       message: "",
@@ -529,6 +531,37 @@ function App() {
       setChatToDelete(null);
     }
   };
+
+  // Handle web search notifications
+  useEffect(() => {
+    const handleWebSearch = (event: CustomEvent) => {
+      console.log("🔍 [APP] Web search performed:", event.detail);
+      const { sources } = event.detail;
+
+      // Add web search sources to the current assistant message
+      if (
+        sources &&
+        sources.length > 0 &&
+        currentAssistantMessageIdRef.current
+      ) {
+        updateMessage(currentAssistantMessageIdRef.current, (prevMsg) => ({
+          ...prevMsg,
+          web_search_sources: sources,
+        }));
+      }
+    };
+
+    window.addEventListener(
+      "web-search-performed",
+      handleWebSearch as EventListener
+    );
+    return () => {
+      window.removeEventListener(
+        "web-search-performed",
+        handleWebSearch as EventListener
+      );
+    };
+  }, [updateMessage]);
 
   // Load messages when selected session changes
   useEffect(() => {

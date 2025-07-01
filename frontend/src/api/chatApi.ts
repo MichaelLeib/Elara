@@ -215,6 +215,27 @@ export async function sendMessageWebSocket(
             contentLength: data.content?.length || 0,
           });
           onChunk?.(data.content, false, undefined, data.progress);
+        } else if (data.type === "web_search") {
+          // Handle web search notifications
+          console.log("🔍 [WEBSOCKET] Web search performed:", {
+            content: data.content,
+            search_terms: data.search_terms,
+            confidence: data.confidence,
+            reason: data.reason,
+            sources: data.sources,
+          });
+          // Dispatch a custom event for the UI to listen to
+          window.dispatchEvent(
+            new CustomEvent("web-search-performed", {
+              detail: {
+                content: data.content,
+                search_terms: data.search_terms,
+                confidence: data.confidence,
+                reason: data.reason,
+                sources: data.sources || [],
+              },
+            })
+          );
         } else if (data.type === "memory_updated") {
           // Handle memory update notifications
           console.log("🧠 [WEBSOCKET] Memory updated:", {
