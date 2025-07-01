@@ -19,6 +19,7 @@ class Settings:
         self._serper_api_key: Optional[str] = None
         self._web_search_enabled: bool = True
         self._web_search_engine: str = "duckduckgo"
+        self._web_search_search_provider: str = "serper"
         self._load_settings()
 
     def _load_settings(self):
@@ -46,6 +47,9 @@ class Settings:
             self._serper_api_key = web_search_settings.get("SERPER_API_KEY")
             self._web_search_enabled = web_search_settings.get("ENABLED", True)
             self._web_search_engine = web_search_settings.get("ENGINE", "duckduckgo")
+            self._web_search_search_provider = web_search_settings.get(
+                "SEARCH_PROVIDER", "serper"
+            )
         except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
             print(f"Warning: Could not load settings.json: {e}")
             print("Using default settings...")
@@ -91,12 +95,20 @@ class Settings:
         return self._serper_api_key
 
     @property
+    def BING_API_KEY(self) -> Optional[str]:
+        return self._bing_api_key
+
+    @property
     def web_search_enabled(self) -> bool:
         return self._web_search_enabled
 
     @property
     def web_search_engine(self) -> str:
         return self._web_search_engine
+
+    @property
+    def web_search_search_provider(self) -> str:
+        return self._web_search_search_provider
 
     def update_settings(
         self,

@@ -19,6 +19,8 @@
   "web_search": {
     "ENABLED": true,
     "ENGINE": "duckduckgo",
-    "SERPER_API_KEY": ""
+    "SEARCH_PROVIDER": "duckduckgo_html",
+    "SERPER_API_KEY": "71ada0a6af8ba42b849d51d6f10a257b16c706dc",
+    "BING_API_KEY": ""
   }
 }

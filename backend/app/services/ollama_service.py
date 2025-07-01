@@ -202,22 +202,68 @@ class OllamaService:
             raise Exception(f"Failed to fetch running models: {str(e)}")
 
     async def check_connection(self) -> Dict[str, Any]:
-        """Check Ollama connection and return status"""
+        """Check Ollama connection and basic health"""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # Check basic connectivity
                 response = await client.get(f"{self.base_url}/api/tags")
-                if response.status_code == 200:
+                if response.status_code != 200:
                     return {
-                        "status": "connected",
-                        "models": response.json().get("models", []),
+                        "status": "error",
+                        "message": f"Ollama service responded with status {response.status_code}",
+                        "available_models": [],
                     }
-                else:
-                    return {
-                        "status": f"error_{response.status_code}",
-                        "error": response.text,
-                    }
+
+                models_data = response.json()
+                available_models = [m["name"] for m in models_data.get("models", [])]
+
+                return {
+                    "status": "healthy",
+                    "message": "Ollama service is responding",
+                    "available_models": available_models,
+                    "total_models": len(available_models),
+                }
+        except httpx.ConnectError as e:
+            return {
+                "status": "error",
+                "message": f"Could not connect to Ollama at {self.base_url}",
+                "error": str(e),
+                "available_models": [],
+            }
         except Exception as e:
-            return {"status": "disconnected", "error": str(e)}
+            return {
+                "status": "error",
+                "message": f"Unexpected error checking Ollama connection: {str(e)}",
+                "available_models": [],
+            }
+
+    async def test_model_response(
+        self, model: str, timeout: float = 30.0
+    ) -> Dict[str, Any]:
+        """Test if a specific model can respond to a simple prompt"""
+        try:
+            test_prompt = "Hello, this is a test. Please respond with 'OK'."
+            start_time = asyncio.get_event_loop().time()
+
+            response = await self.query_ollama(test_prompt, timeout, model)
+            end_time = asyncio.get_event_loop().time()
+
+            return {
+                "status": "success",
+                "model": model,
+                "response_time": end_time - start_time,
+                "response_length": len(response),
+                "response_preview": (
+                    response[:100] + "..." if len(response) > 100 else response
+                ),
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "model": model,
+                "error": str(e),
+                "response_time": None,
+            }
 
 
 # Global service instance

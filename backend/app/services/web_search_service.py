@@ -6,6 +6,7 @@ from urllib.parse import quote_plus
 import httpx
 from app.services.ollama_service import ollama_service
 from app.config.settings import settings
+from bs4 import BeautifulSoup
 
 
 class WebSearchService:
@@ -308,8 +309,8 @@ If should_search is true, provide 3-5 relevant search terms."""
 
             response = await ollama_service.query_ollama(
                 prompt=decision_prompt,
-                timeout=5.0,
-                model="tinyllama:1.1b",  # Use small model for quick decision
+                timeout=30.0,
+                model="phi3:mini",  # Use small model for quick decision
             )
 
             # Parse the response
@@ -360,32 +361,15 @@ If should_search is true, provide 3-5 relevant search terms."""
         self, query: str, engine: str = "duckduckgo"
     ) -> Dict[str, Any]:
         """
-        Perform a web search using the specified engine
-
-        Args:
-            query: Search query
-            engine: Search engine to use ("duckduckgo" or "serper")
-
-        Returns:
-            Search results
+        Perform a web search using the configured provider
         """
-        try:
-            if engine == "duckduckgo":
-                return await self._search_duckduckgo(query)
-            elif engine == "serper":
-                return await self._search_serper(query)
-            else:
-                raise ValueError(f"Unsupported search engine: {engine}")
-
-        except Exception as e:
-            print(f"Web search failed: {e}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "results": [],
-                "query": query,
-                "engine": engine,
-            }
+        provider = getattr(settings, "web_search_search_provider", "serper").lower()
+        if provider == "serper":
+            return await self._search_serper(query)
+        elif provider == "duckduckgo_html":
+            return await self._search_duckduckgo_html(query)
+        # fallback to duckduckgo API
+        return await self._search_duckduckgo(query)
 
     async def _search_duckduckgo(self, query: str) -> Dict[str, Any]:
         """
@@ -644,6 +628,71 @@ If should_search is true, provide 3-5 relevant search terms."""
         """
         search_results = await self.perform_web_search(query, engine)
         return self.format_search_results(search_results)
+
+    async def _search_duckduckgo_html(self, query: str) -> Dict[str, Any]:
+        """
+        Fallback: Scrape DuckDuckGo HTML results page for organic results.
+        """
+        try:
+            url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            async with httpx.AsyncClient(timeout=self.search_timeout) as client:
+                response = await client.get(url, headers=headers)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                    results = []
+                    result_blocks = soup.select(".result")
+                    print(
+                        f"[DuckDuckGo HTML] Found {len(result_blocks)} .result blocks for query: {query}"
+                    )
+                    for result in result_blocks[: self.max_results]:
+                        link_tag = result.select_one(".result__a")
+                        snippet_tag = result.select_one(".result__snippet")
+                        title = link_tag.get_text(strip=True) if link_tag else ""
+                        url = (
+                            link_tag["href"]
+                            if link_tag and link_tag.has_attr("href")
+                            else ""
+                        )
+                        snippet = (
+                            snippet_tag.get_text(strip=True) if snippet_tag else ""
+                        )
+                        print(
+                            f"[DuckDuckGo HTML] Result: title='{title}', url='{url}', snippet='{snippet[:60]}...'"
+                        )
+                        results.append(
+                            {
+                                "title": title,
+                                "snippet": snippet,
+                                "url": url,
+                                "source": "duckduckgo_html",
+                            }
+                        )
+                    return {
+                        "status": "success",
+                        "results": results,
+                        "query": query,
+                        "engine": "duckduckgo_html",
+                        "total_results": len(results),
+                    }
+                else:
+                    print(f"[DuckDuckGo HTML] Non-200 status: {response.status_code}")
+                    return {
+                        "status": "error",
+                        "error": f"DuckDuckGo HTML returned status {response.status_code}",
+                        "results": [],
+                        "query": query,
+                        "engine": "duckduckgo_html",
+                    }
+        except Exception as e:
+            print(f"[DuckDuckGo HTML] Exception: {e}")
+            return {
+                "status": "error",
+                "error": f"DuckDuckGo HTML scraping failed: {str(e)}",
+                "results": [],
+                "query": query,
+                "engine": "duckduckgo_html",
+            }
 
 
 # Global web search service instance

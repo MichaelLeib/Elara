@@ -193,16 +193,16 @@ class DocumentService:
                 return min(40.0, base_timeout / 3)  # Standard chunked timeout
 
         # For direct analysis (including final summaries), scale timeout based on document size
-        # Be much more generous with timeouts for large documents to prevent premature timeouts
+        # Be much more generous with timeouts for small documents to account for model loading time
         if text_length < 500:
-            # Very small documents - use generous timeout to account for model startup time
-            return min(60.0, base_timeout * 0.8)  # 80% of base timeout, max 60s
+            # Very small documents - use very generous timeout to account for model startup time
+            return min(120.0, base_timeout * 1.2)  # 120% of base timeout, max 120s
         elif text_length < 1000:
-            # Small documents - use reasonable timeout
-            return min(45.0, base_timeout * 0.7)  # 70% of base timeout, max 45s
+            # Small documents - use generous timeout for model loading
+            return min(90.0, base_timeout * 1.0)  # 100% of base timeout, max 90s
         elif text_length < 5000:
-            # Medium documents
-            return min(60.0, base_timeout * 0.8)  # 80% of base timeout, max 60s
+            # Medium documents - use generous timeout
+            return min(120.0, base_timeout * 1.0)  # 100% of base timeout, max 120s
         elif text_length < 15000:
             # Large documents use full timeout
             return base_timeout
@@ -472,6 +472,20 @@ class DocumentService:
         else:
             raise Exception(f"Unsupported file type: {ext}")
 
+    async def _warm_up_model(self, model: str) -> None:
+        """Warm up the model by sending a simple request to load it into memory"""
+        try:
+            print(f"[DocumentService] Warming up model: {model}")
+            warm_up_prompt = "Hello, this is a warm-up request."
+            warm_up_timeout = 30.0  # Short timeout for warm-up
+
+            await ollama_service.query_ollama(warm_up_prompt, warm_up_timeout, model)
+            print(f"[DocumentService] Model {model} warmed up successfully")
+        except Exception as e:
+            print(f"[DocumentService] Model warm-up failed for {model}: {e}")
+            # Don't raise the exception - warm-up failure shouldn't stop the main process
+            pass
+
     async def analyze_documents(
         self,
         files: List[Dict[str, Union[str, bytes]]],
@@ -518,8 +532,13 @@ class DocumentService:
                 f"[DocumentService] WARNING: Could not check Ollama service status: {e}"
             )
 
+        # Warm up the model to reduce timeout issues
         if progress_callback:
-            progress_callback("Preparing document analysis...\n", 5)
+            progress_callback("Warming up AI model...\n", 7)
+        await self._warm_up_model(model)
+
+        if progress_callback:
+            progress_callback("Preparing document analysis...\n", 10)
 
         try:
             # Extract text from all documents
@@ -742,37 +761,44 @@ Provide a clear, concise analysis addressing the question directly."""
                 f"[DocumentService] [Direct] Full prompt length: {len(full_prompt)}, estimated tokens: {ModelRegistry.estimate_tokens(full_prompt)}"
             )
 
-            # Try up to 2 times for direct analysis
+            # Try up to 3 times for direct analysis with increasing timeouts
             response = None
-            for attempt in range(2):
+            max_attempts = (
+                3 if len(combined_text) < 10000 else 2
+            )  # More attempts for small documents
+
+            for attempt in range(max_attempts):
                 try:
+                    # Increase timeout on each retry attempt
+                    current_timeout = timeout * (
+                        1.0 + (attempt * 0.5)
+                    )  # 100%, 150%, 200% of original timeout
+                    print(
+                        f"[DocumentService] [Direct] Attempt {attempt + 1}/{max_attempts} with timeout={current_timeout}s"
+                    )
+
                     response = await ollama_service.query_ollama(
-                        full_prompt, timeout, model
+                        full_prompt, current_timeout, model
                     )
                     print(
                         f"[DocumentService] [Direct] Model response received. Length: {len(str(response))}"
                     )
                     break
                 except Exception as e:
-                    if attempt == 0:
+                    if attempt < max_attempts - 1:  # Not the last attempt
                         print(
-                            f"[DocumentService] [Direct] First attempt failed, retrying with longer timeout: {e}"
+                            f"[DocumentService] [Direct] Attempt {attempt + 1} failed: {e}"
                         )
-                        # Try with longer timeout on retry
-                        retry_timeout = timeout * 1.5
-                        try:
-                            response = await ollama_service.query_ollama(
-                                full_prompt, retry_timeout, model
-                            )
-                            print(f"[DocumentService] [Direct] Retry successful")
-                            break
-                        except Exception as retry_e:
-                            print(
-                                f"[DocumentService] [Direct] Retry also failed: {retry_e}"
-                            )
-                            raise retry_e
+                        print(
+                            f"[DocumentService] [Direct] Retrying with longer timeout..."
+                        )
+                        # Small delay before retry to allow model to recover
+                        await asyncio.sleep(2)
                     else:
-                        print(f"[DocumentService] [Direct] Both attempts failed")
+                        # Last attempt failed
+                        print(
+                            f"[DocumentService] [Direct] All {max_attempts} attempts failed"
+                        )
                         raise e
 
             if progress_callback:
@@ -919,41 +945,43 @@ Provide a clear, concise analysis addressing the question directly."""
                     # Small delay to ensure progress is visible
                     await asyncio.sleep(0.1)
 
-                # Try up to 2 times for each chunk
+                # Try up to 3 times for each chunk with increasing timeouts
                 analysis = None
-                for attempt in range(2):
+                max_chunk_attempts = (
+                    3 if len(chunk["text"]) < 5000 else 2
+                )  # More attempts for small chunks
+
+                for attempt in range(max_chunk_attempts):
                     try:
+                        # Increase timeout on each retry attempt
+                        current_timeout = timeout_per_chunk * (
+                            1.0 + (attempt * 0.5)
+                        )  # 100%, 150%, 200% of original timeout
+                        print(
+                            f"[DocumentService] [Chunked] Chunk {chunk['chunk_index']+1} attempt {attempt + 1}/{max_chunk_attempts} with timeout={current_timeout}s"
+                        )
+
                         analysis = await ollama_service.query_ollama(
-                            chunk_prompt, timeout_per_chunk, model
+                            chunk_prompt, current_timeout, model
                         )
                         print(
                             f"[DocumentService] [Chunked] Model response for chunk {chunk['chunk_index']+1} received. Length: {len(str(analysis))}"
                         )
                         break
                     except Exception as e:
-                        if attempt == 0:
+                        if attempt < max_chunk_attempts - 1:  # Not the last attempt
                             print(
-                                f"[DocumentService] [Chunked] First attempt failed for chunk {i+1}, retrying with longer timeout: {e}"
+                                f"[DocumentService] [Chunked] Chunk {chunk['chunk_index']+1} attempt {attempt + 1} failed: {e}"
                             )
-                            # Try with longer timeout on retry for timeout-related errors
-                            retry_timeout = timeout_per_chunk * 1.5
-                            try:
-                                analysis = await ollama_service.query_ollama(
-                                    chunk_prompt, retry_timeout, model
-                                )
-                                print(
-                                    f"[DocumentService] [Chunked] Retry successful for chunk {chunk['chunk_index']+1}"
-                                )
-                                break
-                            except Exception as retry_e:
-                                print(
-                                    f"[DocumentService] [Chunked] Retry also failed for chunk {chunk['chunk_index']+1}: {retry_e}"
-                                )
-                                # Use a fallback analysis
-                                analysis = f"[Analysis failed for chunk {chunk['chunk_index']+1} - content too complex for model]"
-                        else:
                             print(
-                                f"[DocumentService] [Chunked] Both attempts failed for chunk {chunk['chunk_index']+1}, using fallback"
+                                f"[DocumentService] [Chunked] Retrying chunk {chunk['chunk_index']+1} with longer timeout..."
+                            )
+                            # Small delay before retry
+                            await asyncio.sleep(1)
+                        else:
+                            # Last attempt failed - use a fallback analysis
+                            print(
+                                f"[DocumentService] [Chunked] All {max_chunk_attempts} attempts failed for chunk {chunk['chunk_index']+1}, using fallback"
                             )
                             analysis = f"[Analysis failed for chunk {chunk['chunk_index']+1} - content too complex for model]"
 
