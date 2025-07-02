@@ -80,6 +80,7 @@ export interface Settings {
   message_offset: number;
   manual_model_switch: boolean;
   summarization_prompt: string;
+  user_info_extraction_model: string; // "adaptive", "fast", "quality"
 }
 
 export interface ChatSession {

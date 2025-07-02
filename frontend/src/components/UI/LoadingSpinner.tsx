@@ -1,21 +1,63 @@
 /** @jsxImportSource @emotion/react */
-import { css, keyframes } from '@emotion/react';
+import React from "react";
+import { css } from "@emotion/react";
 
-const spin = keyframes`
-  to { transform: rotate(360deg); }
-`;
+interface LoadingSpinnerProps {
+  size?: "small" | "medium" | "large";
+  text?: string;
+  color?: string;
+}
 
-const spinnerStyle = css`
-  display: inline-block;
-  width: 3rem;
-  height: 3rem;
-  border: 0.4rem solid #e0e0e0;
-  border-top: 0.4rem solid #006EE6;
+const spinnerSizes = {
+  small: "12px",
+  medium: "16px",
+  large: "20px",
+};
+
+const spinnerStyle = (size: string, color: string) => css`
+  width: ${size};
+  height: ${size};
+  border: 2px solid transparent;
+  border-top: 2px solid ${color};
   border-radius: 50%;
-  animation: ${spin} 0.8s linear infinite;
-  margin: 2rem auto;
+  animation: spin 1s linear infinite;
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
 `;
 
-export const LoadingSpinner = () => (
-  <div css={spinnerStyle} aria-label="Loading..."></div>
-); 
+const containerStyle = css`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: inherit;
+`;
+
+const textStyle = css`
+  font-weight: 500;
+  letter-spacing: 0.5px;
+`;
+
+export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
+  size = "medium",
+  text = "Loading",
+  color = "currentColor",
+}) => {
+  const spinnerSize = spinnerSizes[size];
+
+  return (
+    <div css={containerStyle}>
+      <div css={spinnerStyle(spinnerSize, color)} />
+      {text && <span css={textStyle}>{text}</span>}
+    </div>
+  );
+};
+
+export default LoadingSpinner;

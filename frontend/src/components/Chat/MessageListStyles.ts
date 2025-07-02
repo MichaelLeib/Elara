@@ -5,7 +5,6 @@ export const messageListContainerStyle = css`
   flex-direction: column;
   gap: 1.5rem;
   width: 100%;
-  height: 90vh;
   overflow-y: auto;
   padding: 1.5rem;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
@@ -81,6 +80,7 @@ export const messageBubbleStyle = (isUser: boolean) => css`
   transition: all 0.2s ease;
   position: relative;
   margin-bottom: 1rem;
+  width: 80%;
 
   /* Enhanced bullet points */
   ul,
@@ -253,36 +253,51 @@ export const loadMoreStyle = css`
 
 export const enterButtonStyle = css`
   position: absolute;
-  bottom: 0.05rem;
-  right: 0.05rem;
-  background: rgba(30, 41, 59, 0.8);
-  border: none;
-  border-radius: 0.5rem;
-  padding: 0.2rem 0.2rem;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+  border-radius: 0.375rem;
+  padding: 0.2rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  z-index: 2;
-  color: #60a5fa;
-  transition: background 0.2s;
-  opacity: 0.85;
+  font-size: 0.875rem;
+  font-weight: 500;
+  z-index: 1000;
+  border-radius: 0.5rem;
+
   &:hover {
-    background: #1d4ed8;
-    color: #fff;
-    opacity: 1;
+    background: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
+
+    &:hover {
+      background: rgba(59, 130, 246, 0.3);
+      border-color: rgba(59, 130, 246, 0.6);
+    }
   }
 `;
 
 export const messageListStyle = css`
-  flex: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   overflow-y: auto;
   padding: 1rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-height: 0;
-  height: 100%;
 `;
 
 export const messageStyle = css`
@@ -455,4 +470,33 @@ export const stopButtonStyle = css`
       border-color: rgba(239, 68, 68, 0.6);
     }
   }
+`;
+
+export const stoppingSpinnerStyle = css`
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 6px;
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+`;
+
+export const progressContainerStyle = css`
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  position: relative;
+  overflow: hidden;
 `;

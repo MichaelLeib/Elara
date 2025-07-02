@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+/** @jsxImportSource @emotion/react */
+import React, { useState, useCallback } from "react";
 import styled from "@emotion/styled";
 
 interface Source {
@@ -111,23 +112,19 @@ const PillWrapper = styled.div`
 const SourcePills: React.FC<SourcePillsProps> = ({ sources, className }) => {
   const [expandedPill, setExpandedPill] = useState<number | null>(null);
 
-  if (!sources || sources.length === 0) {
-    return null;
-  }
-
-  const handlePillClick = (url: string) => {
+  const handlePillClick = useCallback((url: string) => {
     window.open(url, "_blank", "noopener,noreferrer");
-  };
+  }, []);
 
-  const handlePillHover = (index: number) => {
+  const handlePillHover = useCallback((index: number) => {
     setExpandedPill(index);
-  };
+  }, []);
 
-  const handlePillLeave = () => {
+  const handlePillLeave = useCallback(() => {
     setExpandedPill(null);
-  };
+  }, []);
 
-  const getDomainName = (url: string) => {
+  const getDomainName = useCallback((url: string) => {
     try {
       // Handle DuckDuckGo redirect URLs
       if (url.startsWith("//duckduckgo.com/l/?uddg=")) {
@@ -153,7 +150,18 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, className }) => {
     } catch {
       return "Unknown";
     }
-  };
+  }, []);
+
+  const handleFaviconError = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      e.currentTarget.src = "/default-favicon.png";
+    },
+    []
+  );
+
+  if (!sources || sources.length === 0) {
+    return null;
+  }
 
   return (
     <PillsContainer className={className}>
@@ -169,9 +177,7 @@ const SourcePills: React.FC<SourcePillsProps> = ({ sources, className }) => {
             <Favicon
               src={source.favicon_url || "/default-favicon.png"}
               alt={getDomainName(source.url)}
-              onError={(e) => {
-                e.currentTarget.src = "/default-favicon.png";
-              }}
+              onError={handleFaviconError}
             />
             <SourceName>{getDomainName(source.url)}</SourceName>
             {expandedPill === index && (

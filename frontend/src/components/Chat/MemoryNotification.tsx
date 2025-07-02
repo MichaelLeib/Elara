@@ -1,7 +1,18 @@
 /** @jsxImportSource @emotion/react */
-import { css } from "@emotion/react";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { FaBrain, FaCheck } from "react-icons/fa";
+import {
+  notificationContainerStyle,
+  notificationVisibleStyle,
+  notificationStyle,
+  iconStyle,
+  contentStyle,
+  titleStyle,
+  messageStyle,
+  itemsListStyle,
+  itemStyle,
+  checkIconStyle,
+} from "./MemoryNotificationStyles";
 
 interface MemoryNotificationProps {
   isVisible: boolean;
@@ -15,76 +26,7 @@ interface MemoryNotificationProps {
   onClose: () => void;
 }
 
-const notificationContainerStyle = css`
-  position: fixed;
-  top: 2rem;
-  right: 2rem;
-  z-index: 1000;
-  max-width: 400px;
-  transform: translateX(100%);
-  transition: transform 0.3s ease-in-out;
-`;
-
-const notificationVisibleStyle = css`
-  transform: translateX(0);
-`;
-
-const notificationStyle = css`
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  padding: 1rem 1.5rem;
-  border-radius: 0.75rem;
-  box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-`;
-
-const iconStyle = css`
-  flex-shrink: 0;
-  font-size: 1.25rem;
-`;
-
-const contentStyle = css`
-  flex: 1;
-`;
-
-const titleStyle = css`
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
-
-const messageStyle = css`
-  opacity: 0.9;
-  line-height: 1.4;
-`;
-
-const itemsListStyle = css`
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  opacity: 0.8;
-`;
-
-const itemStyle = css`
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-bottom: 0.125rem;
-`;
-
-const checkIconStyle = css`
-  color: #a7f3d0;
-  font-size: 0.75rem;
-`;
-
-export function MemoryNotification({
+export const MemoryNotification = React.memo(function MemoryNotification({
   isVisible,
   message,
   savedItems,
@@ -140,4 +82,4 @@ export function MemoryNotification({
       </div>
     </div>
   );
-}
+});

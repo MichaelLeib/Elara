@@ -1,7 +1,14 @@
 /** @jsxImportSource @emotion/react */
-import { css } from "@emotion/react";
 import { useState } from "react";
 import { FaChevronDown } from "react-icons/fa6";
+import {
+  accordionStyle,
+  accordionHeaderStyle,
+  accordionTitleStyle,
+  accordionIconStyle,
+  accordionContentStyle,
+  accordionInnerStyle,
+} from "./AccordionStyles";
 
 interface AccordionProps {
   title: string;
@@ -9,75 +16,6 @@ interface AccordionProps {
   defaultOpen?: boolean;
   className?: string;
 }
-
-const accordionStyle = css`
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  overflow: hidden;
-`;
-
-const accordionHeaderStyle = css`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  background: #f9fafb;
-  cursor: pointer;
-  border: none;
-  width: 100%;
-  text-align: left;
-  transition: background-color 0.2s;
-
-  &:hover {
-    background: #f3f4f6;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    background: #374151;
-    color: #d1d5db;
-
-    &:hover {
-      background: #4b5563;
-    }
-  }
-`;
-
-const accordionTitleStyle = css`
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-  margin: 0;
-
-  @media (prefers-color-scheme: dark) {
-    color: #d1d5db;
-  }
-`;
-
-const accordionIconStyle = (isOpen: boolean) => css`
-  transition: transform 0.2s;
-  transform: ${isOpen ? "rotate(180deg)" : "rotate(0deg)"};
-  color: #6b7280;
-
-  @media (prefers-color-scheme: dark) {
-    color: #9ca3af;
-  }
-`;
-
-const accordionContentStyle = (isOpen: boolean) => css`
-  max-height: ${isOpen ? "2000px" : "0"};
-  overflow: hidden;
-  transition: max-height 0.3s ease-in-out;
-`;
-
-const accordionInnerStyle = css`
-  padding: 20px;
-  border-top: 1px solid #e5e7eb;
-
-  @media (prefers-color-scheme: dark) {
-    border-top-color: #4b5563;
-  }
-`;
 
 export function Accordion({
   title,
@@ -91,6 +29,16 @@ export function Accordion({
     setIsOpen(!isOpen);
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleAccordion();
+    }
+  };
+
+  const accordionId = `accordion-${title.toLowerCase().replace(/\s+/g, "-")}`;
+  const contentId = `${accordionId}-content`;
+
   return (
     <div
       css={accordionStyle}
@@ -99,15 +47,26 @@ export function Accordion({
       <button
         css={accordionHeaderStyle}
         onClick={toggleAccordion}
+        onKeyDown={handleKeyDown}
         type="button"
+        aria-expanded={isOpen}
+        aria-controls={contentId}
+        id={accordionId}
       >
         <h3 css={accordionTitleStyle}>{title}</h3>
         <FaChevronDown
           css={accordionIconStyle(isOpen)}
           size={16}
+          aria-hidden="true"
         />
       </button>
-      <div css={accordionContentStyle(isOpen)}>
+      <div
+        css={accordionContentStyle(isOpen)}
+        id={contentId}
+        role="region"
+        aria-labelledby={accordionId}
+        aria-hidden={!isOpen}
+      >
         <div css={accordionInnerStyle}>{children}</div>
       </div>
     </div>

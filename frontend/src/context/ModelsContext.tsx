@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { getModels } from "../api/chatApi";
 import { ModelsContext, type Model } from "./ModelsContext";
 
@@ -26,8 +26,19 @@ export const ModelsProvider: React.FC<{ children: React.ReactNode }> = ({
     reloadModels();
   }, [reloadModels]);
 
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      models,
+      loading,
+      error,
+      reloadModels,
+    }),
+    [models, loading, error, reloadModels]
+  );
+
   return (
-    <ModelsContext.Provider value={{ models, loading, error, reloadModels }}>
+    <ModelsContext.Provider value={contextValue}>
       {children}
     </ModelsContext.Provider>
   );
