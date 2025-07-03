@@ -73,6 +73,28 @@ async def websocket_endpoint(websocket: WebSocket):
                         if "stop_analysis_event" in locals():
                             stop_analysis_event.set()
                         continue
+                    # Handle image_based_pdf_choice from frontend
+                    if parsed_data.get("type") == "image_based_pdf_choice":
+                        # User has chosen OCR or vision for a scanned PDF
+                        # Ensure all arguments are strings
+                        choice = str(parsed_data.get("choice") or "")
+                        file_path = str(parsed_data.get("file_path") or "")
+                        filename = str(parsed_data.get("filename") or "")
+                        prompt = str(parsed_data.get("prompt") or "")
+                        model = str(parsed_data.get("model") or "")
+                        session_id = parsed_data.get("session_id", None)
+                        is_private = parsed_data.get("isPrivate", True)
+                        file_handler = WebSocketFileHandler(websocket)
+                        await file_handler.handle_image_based_pdf_choice(
+                            choice=choice,
+                            file_path=file_path,
+                            filename=filename,
+                            prompt=prompt,
+                            model=model,
+                            session_id=session_id,
+                            is_private=is_private,
+                        )
+                        continue
                 else:
                     message = data or ""
                     model = settings.OLLAMA_MODEL

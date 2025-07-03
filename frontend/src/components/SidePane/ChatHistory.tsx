@@ -10,7 +10,7 @@ import {
   FaLock,
 } from "react-icons/fa6";
 import dayjs from "dayjs";
-import { useSettings } from "../../context/useSettings";
+import { useSettingsStore } from "../../store";
 
 interface ChatHistoryProps {
   onNewChat: () => void;
@@ -330,7 +330,7 @@ export function ChatHistory({
 }: ChatHistoryProps) {
   const [editingChatIndex, setEditingChatIndex] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
-  const { settings } = useSettings();
+  const { settings } = useSettingsStore();
 
   const handleChatClick = (sessionId: string) => {
     onSelectChat(sessionId);

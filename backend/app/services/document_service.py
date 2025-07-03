@@ -16,6 +16,17 @@ import io
 from app.services.ollama_service import ollama_service
 from app.config.settings import settings
 
+# OCR and image conversion dependencies
+try:
+    import pytesseract
+except ImportError:
+    pytesseract = None
+try:
+    from pdf2image import convert_from_path
+except ImportError:
+    convert_from_path = None
+from PIL import Image
+
 
 class ModelRegistry:
     """Registry of model capabilities and context windows"""
@@ -380,27 +391,51 @@ class DocumentService:
         except Exception as e:
             raise Exception(f"Failed to extract text from DOCX file: {str(e)}")
 
-    async def extract_text_from_pdf(self, file_path: str) -> str:
+    async def extract_text_from_pdf_ocr(self, file_path: str) -> str:
+        """Extract text from image-based PDF using OCR (pytesseract)"""
+        if PyPDF2 is None:
+            raise Exception(
+                "PyPDF2 is not installed. Please install it with: pip install PyPDF2"
+            )
+        if pytesseract is None:
+            raise Exception(
+                "pytesseract is not installed. Please install it with: pip install pytesseract"
+            )
+        if convert_from_path is None:
+            raise Exception(
+                "pdf2image is not installed. Please install it with: pip install pdf2image"
+            )
+        try:
+            images = convert_from_path(file_path)
+            text_parts = []
+            for page_num, pil_image in enumerate(images):
+                try:
+                    ocr_text = pytesseract.image_to_string(pil_image)
+                    text_parts.append(f"Page {page_num + 1} (OCR):\n{ocr_text}")
+                except Exception as e:
+                    text_parts.append(f"Page {page_num + 1} (OCR) failed: {e}")
+            # Always return a string
+            return "\n\n".join(text_parts)
+        except Exception as e:
+            return f"OCR extraction failed: {str(e)}"
+
+    async def extract_text_from_pdf(self, file_path: str) -> Union[str, Dict[str, str]]:
         """Extract text from PDF file"""
         if PyPDF2 is None:
             raise Exception(
                 "PyPDF2 is not installed. Please install it with: pip install PyPDF2"
             )
-
         try:
             # Add file size debugging
             file_size = os.path.getsize(file_path)
             print(f"[DocumentService] PDF file size: {file_size} bytes")
-
             text_parts = []
             total_pages = 0
             pages_with_text = 0
-
             with open(file_path, "rb") as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 total_pages = len(pdf_reader.pages)
                 print(f"[DocumentService] PDF has {total_pages} pages")
-
                 for page_num, page in enumerate(pdf_reader.pages):
                     try:
                         page_text = page.extract_text()
@@ -418,23 +453,21 @@ class DocumentService:
                         print(
                             f"[DocumentService] Error extracting text from page {page_num + 1}: {page_error}"
                         )
-
             extracted_text = "\n\n".join(text_parts)
             print(
                 f"[DocumentService] PDF extraction summary: {total_pages} total pages, {pages_with_text} pages with text, {len(extracted_text)} total characters"
             )
-
             if not extracted_text.strip():
                 # Check if this might be an image-based PDF
                 if total_pages > 0:
-                    raise Exception(
-                        f"PDF appears to be image-based or contains no extractable text. "
-                        f"Found {total_pages} pages but extracted 0 characters. "
-                        f"This type of PDF requires OCR (Optical Character Recognition) to extract text."
-                    )
+                    # Instead of raising, return a special dict
+                    return {
+                        "type": "image_based_pdf",
+                        "message": "This PDF appears to be a scanned document. Would you like to extract text using OCR or analyze it as an image with the vision model?",
+                        "file_path": file_path,
+                    }
                 else:
                     raise Exception("PDF appears to be empty or corrupted")
-
             return extracted_text
         except Exception as e:
             if "image-based" in str(e) or "no extractable text" in str(e):
@@ -459,7 +492,9 @@ class DocumentService:
         except Exception as e:
             raise Exception(f"Failed to extract text from text file: {str(e)}")
 
-    async def extract_text_from_file(self, file_path: str, filename: str) -> str:
+    async def extract_text_from_file(
+        self, file_path: str, filename: str
+    ) -> Union[str, Dict[str, str]]:
         """Extract text from file based on its extension"""
         ext = Path(filename).suffix.lower()
 
@@ -580,6 +615,20 @@ class DocumentService:
 
                 try:
                     text = await self.extract_text_from_file(file_path, filename)
+                    if isinstance(text, dict) and text.get("type") == "image_based_pdf":
+                        # Add progress callback to indicate detection is complete
+                        if progress_callback:
+                            progress_callback(
+                                "Image-based PDF detected, prompting for user choice...",
+                                15,
+                            )
+                        # Return special response for frontend to prompt user
+                        return {
+                            "status": "image_based_pdf",
+                            "filename": filename,
+                            "file_path": file_path,
+                            "message": text.get("message"),
+                        }
                     document_texts.append(
                         {"filename": filename, "text": text, "length": len(text)}
                     )
@@ -1184,6 +1233,125 @@ Provide a coherent, comprehensive answer:"""
                     await aiofiles.os.remove(file_path)
             except Exception:
                 pass  # Ignore cleanup errors
+
+    async def analyze_documents_ocr(
+        self, file_path: str, filename: str, progress_callback=None
+    ) -> dict:
+        """Analyze a PDF using OCR extraction"""
+        if not file_path or not isinstance(file_path, str):
+            return {"status": "error", "message": "Invalid file_path for OCR analysis."}
+
+        if pytesseract is None:
+            raise Exception(
+                "pytesseract is not installed. Please install it with: pip install pytesseract"
+            )
+
+        if progress_callback:
+            progress_callback("Converting PDF to images...", 35)
+
+        if convert_from_path is None:
+            raise Exception(
+                "pdf2image is not installed. Please install it with: pip install pdf2image"
+            )
+
+        try:
+            images = convert_from_path(file_path)
+            total_pages = len(images)
+
+            if progress_callback:
+                progress_callback(f"Converting PDF to {total_pages} images...", 40)
+
+            text_parts = []
+            for page_num, pil_image in enumerate(images):
+                if progress_callback:
+                    progress_per_page = 40 + (page_num / total_pages) * 20  # 40% to 60%
+                    progress_callback(
+                        f"Processing page {page_num + 1}/{total_pages} with OCR...",
+                        int(progress_per_page),
+                    )
+
+                try:
+                    ocr_text = pytesseract.image_to_string(pil_image)
+                    text_parts.append(f"Page {page_num + 1} (OCR):\n{ocr_text}")
+                except Exception as e:
+                    text_parts.append(f"Page {page_num + 1} (OCR) failed: {e}")
+
+            ocr_text = "\n\n".join(text_parts)
+
+            if progress_callback:
+                progress_callback("OCR extraction completed", 60)
+
+            return {
+                "status": "success",
+                "method": "ocr",
+                "filename": filename,
+                "ocr_text": ocr_text,
+            }
+        except Exception as e:
+            return {"status": "error", "message": f"OCR extraction failed: {str(e)}"}
+
+    async def analyze_documents_vision(
+        self,
+        file_path: str,
+        filename: str,
+        prompt: str,
+        model: str,
+        progress_callback=None,
+    ) -> dict:
+        """Analyze a PDF as images using the vision model"""
+        if not file_path or not isinstance(file_path, str):
+            return {
+                "status": "error",
+                "message": "Invalid file_path for vision analysis.",
+            }
+        from app.services.image_service import image_service
+
+        if convert_from_path is None:
+            raise Exception(
+                "pdf2image is not installed. Please install it with: pip install pdf2image"
+            )
+
+        if progress_callback:
+            progress_callback("Converting PDF to images...", 35)
+
+        images = convert_from_path(file_path)
+        total_pages = len(images)
+
+        if progress_callback:
+            progress_callback(f"Converting PDF to {total_pages} images...", 40)
+
+        files = []
+        for i, img in enumerate(images):
+            if progress_callback:
+                progress_per_page = 40 + (i / total_pages) * 20  # 40% to 60%
+                progress_callback(
+                    f"Processing page {i + 1}/{total_pages}...", int(progress_per_page)
+                )
+
+            img_bytes = io.BytesIO()
+            img.save(img_bytes, format="PNG")
+            files.append(
+                {
+                    "filename": f"{filename}_page_{i+1}.png",
+                    "content": img_bytes.getvalue(),
+                }
+            )
+
+        if progress_callback:
+            progress_callback("Analyzing images with vision model...", 65)
+
+        # Use the image_service to analyze
+        result = await image_service.analyze_images(files, prompt, model)
+
+        if progress_callback:
+            progress_callback("Vision analysis completed", 80)
+
+        return {
+            "status": "success",
+            "method": "vision",
+            "filename": filename,
+            "vision_result": result,
+        }
 
 
 # Global service instance

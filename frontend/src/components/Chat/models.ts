@@ -13,16 +13,31 @@ export type WebSearchSource = {
   domain: string;
 };
 
-export type Message = {
+export type PdfChoiceMessage = {
+  type: "pdf_choice";
   created_at: string;
   id: string;
-  message: string;
-  model: string | Model;
-  updated_at: string;
   user_id: string;
-  files?: FileInfo[];
-  web_search_sources?: WebSearchSource[];
+  message: string;
+  filename: string;
+  file_path: string;
+  prompt: string;
+  model: string;
 };
+
+export type Message =
+  | {
+      type?: "default";
+      created_at: string;
+      id: string;
+      message: string;
+      model: string | Model;
+      updated_at: string;
+      user_id: string;
+      files?: FileInfo[];
+      web_search_sources?: WebSearchSource[];
+    }
+  | PdfChoiceMessage;
 
 export type MessageListProps = {
   messages: Message[];

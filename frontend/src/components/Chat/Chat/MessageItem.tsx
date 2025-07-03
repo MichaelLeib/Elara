@@ -1,6 +1,6 @@
 /** @jsxImportSource @emotion/react */
 import React, { useMemo } from "react";
-import type { Message } from "./models";
+import type { Message } from "../models";
 import { FaArrowDown, FaStop } from "react-icons/fa";
 import {
   userMessageStyle,
@@ -17,11 +17,11 @@ import {
   progressContainerStyle,
   enterButtonStyle,
 } from "./MessageListStyles";
-import { AnimatedProgressText } from "./DocAnalysisProgress";
-import { FileList } from "./FileList";
+import { AnimatedProgressText } from "../DocumentAnalysis/DocAnalysisProgress";
+import { FileList } from "../DocumentAnalysis/FileList";
 import { AnimatedThinking } from "./AnimatedThinking";
-import SourcePills from "../UI/SourcePills";
-import { useEventHandling } from "../../hooks/useEventHandling";
+import SourcePills from "../../UI/SourcePills";
+import { useUIStore } from "../../../store";
 
 interface MessageItemProps {
   message: Message;
@@ -36,14 +36,16 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   isThinking,
   onAppendToInput,
 }) => {
-  const {
-    progress,
-    progressText,
-    isStreaming,
-    isStopping,
-    webSearchStatus,
-    handleStopAnalysis,
-  } = useEventHandling();
+  const { progress, progressText, isStreaming, isStopping, webSearchStatus } =
+    useUIStore();
+
+  const handleStopAnalysis = () => {
+    window.dispatchEvent(
+      new CustomEvent("stop-analysis", {
+        detail: { timestamp: Date.now() },
+      })
+    );
+  };
 
   // Memoize computed values to avoid recalculating on every render
   const messageState = useMemo(() => {
@@ -144,8 +146,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         ) : typeof message.message === "string" ? (
           <div>
             {formattedMessage}
-            {message.files && <FileList files={message.files} />}
-            {message.web_search_sources &&
+            {"files" in message && message.files && (
+              <FileList files={message.files} />
+            )}
+            {"web_search_sources" in message &&
+              message.web_search_sources &&
               message.web_search_sources.length > 0 && (
                 <SourcePills sources={message.web_search_sources} />
               )}

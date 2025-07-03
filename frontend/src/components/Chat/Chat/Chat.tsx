@@ -1,8 +1,8 @@
 /** @jsxImportSource @emotion/react */
 
-import type { Message } from "./models";
+import type { Message } from "../models";
 import { MessageList } from "./MessageList";
-import { ErrorBoundary } from "../../ErrorBoundary";
+import { ErrorBoundary } from "../../../ErrorBoundary";
 import { useRef } from "react";
 import { FaLock } from "react-icons/fa6";
 import {
@@ -22,6 +22,8 @@ interface ChatProps {
   hasMore?: boolean;
   isLoadingMore?: boolean;
   isPrivate?: boolean;
+  handlePdfChoice?: (msgId: string, choice: "ocr" | "vision") => void;
+  currentSessionModel?: string;
 }
 
 export function Chat({
@@ -33,6 +35,8 @@ export function Chat({
   hasMore = false,
   isLoadingMore = false,
   isPrivate,
+  handlePdfChoice,
+  currentSessionModel,
 }: ChatProps) {
   const messageInputRef = useRef<MessageInputHandle>(null);
 
@@ -62,6 +66,7 @@ export function Chat({
             isLoadingMore={isLoadingMore}
             onAppendToInput={handleAppendToInput}
             isPrivate={isPrivate}
+            handlePdfChoice={handlePdfChoice}
           />
         </ErrorBoundary>
       </div>
@@ -75,6 +80,7 @@ export function Chat({
             disabled={isLoading}
             placeholder="Type your message..."
             messages={messages}
+            currentSessionModel={currentSessionModel}
           />
         </ErrorBoundary>
       </div>

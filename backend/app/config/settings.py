@@ -95,10 +95,6 @@ class Settings:
         return self._serper_api_key
 
     @property
-    def BING_API_KEY(self) -> Optional[str]:
-        return self._bing_api_key
-
-    @property
     def web_search_enabled(self) -> bool:
         return self._web_search_enabled
 

@@ -1,7 +1,7 @@
 /** @jsxImportSource @emotion/react */
 import React from "react";
-import { getFileIcon, formatFileSize } from "../../utils/fileUtils";
-import type { FileInfo } from "./models";
+import { getFileIcon, formatFileSize } from "../../../utils/fileUtils";
+import type { FileInfo } from "../models";
 import {
   fileDisplayStyle,
   fileItemStyle,

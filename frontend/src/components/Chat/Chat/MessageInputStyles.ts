@@ -261,7 +261,7 @@ export const modelButtonStyle = css`
   transition: all 0.2s ease;
   border: none;
   background: none;
-  font-size: 0.875rem;
+  font-size: 0.3rem;
   font-weight: 500;
 
   &:hover {
@@ -292,6 +292,7 @@ export const dropdownStyle = css`
   max-height: 200px;
   overflow-y: auto;
   margin-bottom: 0.5rem;
+  width: 10rem;
 
   @media (prefers-color-scheme: dark) {
     background: #1e293b;
@@ -307,15 +308,13 @@ export const dropdownIconStyle = (isOpen: boolean) => css`
 export const dropdownItemStyle = (isSelected: boolean) => css`
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
   background: none;
   width: 100%;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: 0.7rem;
   color: ${isSelected ? "#3b82f6" : "#374151"};
   background: ${isSelected ? "rgba(59, 130, 246, 0.1)" : "transparent"};
 
@@ -346,9 +345,17 @@ export const dropdownItemStyle = (isSelected: boolean) => css`
 `;
 
 export const modelIconStyle = css`
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 0.875rem;
+  flex-shrink: 0;
 `;
 
 export const modelNameStyle = css`
@@ -399,6 +406,10 @@ export const spinnerStyle = css`
 export const loadingTextStyle = css`
   color: #6b7280;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 10rem;
 
   @media (prefers-color-scheme: dark) {
     color: #9ca3af;

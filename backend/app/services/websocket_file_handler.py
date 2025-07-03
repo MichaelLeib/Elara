@@ -423,6 +423,33 @@ class WebSocketFileHandler:
                 stop_event=stop_event,
             )
 
+            # If the document is image-based, prompt the user for OCR or vision analysis
+            if analysis_result.get("status") == "image_based_pdf":
+                print(
+                    "[WebSocketFileHandler] Image-based PDF detected, sending choice prompt"
+                )
+                # Clear progress before sending the choice prompt
+                await self.send_clear_progress()
+
+                # Send the choice prompt immediately
+                choice_message = {
+                    "type": "image_based_pdf_choice",
+                    "message": analysis_result.get("message"),
+                    "filename": analysis_result.get("filename"),
+                    "file_path": analysis_result.get("file_path"),
+                    "prompt": message,
+                    "model": model,
+                }
+
+                print(
+                    f"[WebSocketFileHandler] Sending choice message: {choice_message}"
+                )
+                await self._safe_send(json.dumps(choice_message))
+
+                # Do not proceed with normal analysis/session creation until user responds
+                print("[WebSocketFileHandler] Waiting for user choice...")
+                return
+
             # Check if this is a partial result (stopped by user)
             if analysis_result.get("status") == "partial":
                 await self.send_status("Analysis stopped by user request", 100)
@@ -484,6 +511,215 @@ class WebSocketFileHandler:
                 "document",
             )
         )
+
+    async def handle_image_based_pdf_choice(
+        self,
+        choice: str,
+        file_path: str,
+        filename: str,
+        prompt: str,
+        model: str,
+        session_id: Optional[str] = None,
+        is_private: bool = True,
+    ) -> None:
+        print(
+            f"[DEBUG] handle_image_based_pdf_choice called with choice={choice}, file_path={file_path}, filename={filename}, prompt={prompt}, model={model}, session_id={session_id}, is_private={is_private}"
+        )
+
+        # Create a progress callback for this analysis
+        progress_callback = self.create_progress_callback()
+
+        try:
+            # Clear any existing progress and start fresh
+            await self.send_clear_progress()
+            progress_callback(f"Processing your choice: {choice}...", 25)
+
+            if choice == "ocr":
+                print("[DEBUG] Starting OCR branch...")
+
+                # First extract text using OCR
+                progress_callback("Extracting text using OCR...", 30)
+                ocr_result = await document_service.analyze_documents_ocr(
+                    file_path, filename, progress_callback
+                )
+                print(f"[DEBUG] OCR extraction result: {ocr_result}")
+
+                if ocr_result.get("status") != "success":
+                    print(f"[DEBUG] OCR failed with status: {ocr_result.get('status')}")
+                    await self.send_error(
+                        f"OCR extraction failed: {ocr_result.get('ocr_text', 'Unknown error')}"
+                    )
+                    return
+
+                ocr_text = ocr_result.get("ocr_text", "")
+                print(f"[DEBUG] OCR text length: {len(ocr_text)}")
+                if not ocr_text.strip():
+                    print("[DEBUG] OCR text is empty")
+                    await self.send_error(
+                        "OCR extraction returned empty text. The document may be unreadable."
+                    )
+                    return
+
+                # Now analyze the OCR text with the AI model
+                print("[DEBUG] Starting AI analysis...")
+                progress_callback("Analyzing extracted text with AI...", 65)
+
+                # Create a prompt that includes the OCR text and user's question
+                analysis_prompt = f"""Analyze this document content and answer the user's question.
+
+Document Content (extracted via OCR):
+{ocr_text}
+
+User's Question: {prompt}
+
+Please provide a comprehensive analysis addressing the user's question:"""
+
+                # Use ollama service directly to analyze the OCR text
+                from app.services.ollama_service import ollama_service
+                from app.config.settings import settings
+
+                timeout = document_service.calculate_timeout(
+                    len(ocr_text), is_chunked=False, model_name=model
+                )
+                print(
+                    f"[DEBUG] Calling ollama_service with timeout={timeout}, model={model}, prompt_len={len(analysis_prompt)}, ocr_text_len={len(ocr_text)}"
+                )
+
+                try:
+                    print("[DEBUG] About to call ollama_service.query_ollama...")
+                    progress_callback(f"Processing with {model}...", 75)
+                    ai_analysis = await ollama_service.query_ollama(
+                        analysis_prompt, timeout, model
+                    )
+                    print(
+                        f"[DEBUG] AI analysis received. Length: {len(str(ai_analysis))}"
+                    )
+                    print(f"[DEBUG] AI analysis preview: {str(ai_analysis)[:200]}...")
+
+                    # Create the analysis result structure
+                    analysis_result = {
+                        "status": "success",
+                        "analysis": ai_analysis,
+                        "documents_processed": 1,
+                        "total_text_length": len(ocr_text),
+                        "method": "ocr_analysis",
+                        "timeout_used": timeout,
+                        "ocr_text": ocr_text,  # Include original OCR text for reference
+                    }
+                    print(
+                        f"[DEBUG] Created analysis_result with method: {analysis_result['method']}"
+                    )
+
+                except Exception as e:
+                    print(f"[DEBUG] AI analysis failed: {e}")
+                    import traceback
+
+                    traceback.print_exc()
+                    # Fallback to just showing the OCR text with a note
+                    analysis_result = {
+                        "status": "partial",
+                        "analysis": f"AI analysis failed: {str(e)}\n\nExtracted Text (OCR):\n{ocr_text}",
+                        "documents_processed": 1,
+                        "total_text_length": len(ocr_text),
+                        "method": "ocr_fallback",
+                        "timeout_used": timeout,
+                        "ocr_text": ocr_text,
+                    }
+                    print(
+                        f"[DEBUG] Created fallback analysis_result with method: {analysis_result['method']}"
+                    )
+
+                # Stream the AI analysis result
+                print(
+                    f"[DEBUG] About to stream analysis result: {len(analysis_result.get('analysis', ''))} chars"
+                )
+                progress_callback("Preparing results...", 90)
+                await self.send_clear_progress()
+                await self.stream_analysis_result(analysis_result.get("analysis", ""))
+                print("[DEBUG] About to send_analysis_complete for OCR")
+                await self.send_analysis_complete(analysis_result, "document")
+
+                # Create session and save messages to database
+                session_id, user_message_id, assistant_message_id = (
+                    await self.create_session_and_save_messages(
+                        session_id,
+                        prompt,
+                        model,
+                        is_private,
+                        [
+                            {"filename": filename, "content": None}
+                        ],  # File info for database
+                        analysis_result,
+                        "document",
+                    )
+                )
+
+                # Generate and store conversation summary asynchronously in the background
+                asyncio.create_task(
+                    self.generate_summary_background(
+                        session_id,
+                        user_message_id,
+                        assistant_message_id,
+                        prompt,
+                        analysis_result,
+                        model,
+                        "document",
+                    )
+                )
+
+            elif choice == "vision":
+                progress_callback("Converting PDF to images...", 30)
+                result = await document_service.analyze_documents_vision(
+                    file_path, filename, prompt, model, progress_callback
+                )
+                print(f"[DEBUG] Vision result: {result}")
+
+                progress_callback("Preparing results...", 85)
+                await self.send_clear_progress()
+                await self.stream_analysis_result(
+                    result.get("vision_result", {}).get("analysis", "")
+                )
+                print("[DEBUG] About to send_analysis_complete for Vision")
+                await self.send_analysis_complete(
+                    result.get("vision_result", {}), "image"
+                )
+
+                # Create session and save messages to database
+                session_id, user_message_id, assistant_message_id = (
+                    await self.create_session_and_save_messages(
+                        session_id,
+                        prompt,
+                        model,
+                        is_private,
+                        [
+                            {"filename": filename, "content": None}
+                        ],  # File info for database
+                        result.get("vision_result", {}),
+                        "image",
+                    )
+                )
+
+                # Generate and store conversation summary asynchronously in the background
+                asyncio.create_task(
+                    self.generate_summary_background(
+                        session_id,
+                        user_message_id,
+                        assistant_message_id,
+                        prompt,
+                        result.get("vision_result", {}),
+                        model,
+                        "image",
+                    )
+                )
+            else:
+                await self.send_error("Invalid choice for image-based PDF analysis.")
+
+        except Exception as e:
+            print(f"[DEBUG] Error in handle_image_based_pdf_choice: {e}")
+            import traceback
+
+            traceback.print_exc()
+            await self.send_error(f"Error processing {choice}: {str(e)}")
 
     async def _handle_image_analysis(
         self,

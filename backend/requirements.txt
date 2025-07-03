@@ -1,3 +1,7 @@
+# NOTE: For OCR on PDFs, you must also install Poppler at the system level.
+# macOS: brew install poppler
+# Ubuntu/Debian: sudo apt-get install poppler-utils
+# Windows: Download from https://blog.alivate.com.au/poppler-windows/ and add to PATH
 fastapi
 httpx
 uvicorn
@@ -9,3 +13,5 @@ PyPDF2
 aiofiles
 Pillow
 websockets
+pytesseract
+pdf2image

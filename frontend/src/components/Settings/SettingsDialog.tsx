@@ -4,7 +4,7 @@ import { Button } from "../UI/Button";
 import { Accordion } from "../UI/Accordion";
 import { FaTrash } from "react-icons/fa6";
 import { IoClose } from "react-icons/io5";
-import { useSettingsDialog } from "../../hooks/useSettingsDialog";
+import { useSettingsDialogStore } from "../../store";
 import {
   overlayStyle,
   settingsDialogStyle,
@@ -70,7 +70,7 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
     // Data loading
     loadData,
-  } = useSettingsDialog();
+  } = useSettingsDialogStore();
 
   // Load data when dialog opens
   useEffect(() => {

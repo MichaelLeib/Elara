@@ -1,7 +1,7 @@
 /** @jsxImportSource @emotion/react */
 import React, { useState } from "react";
-import { ErrorBoundary } from "../../ErrorBoundary";
-import { SUPPORTED_FILE_TYPES, validateFiles } from "../../utils/fileUtils";
+import { ErrorBoundary } from "../../../ErrorBoundary";
+import { SUPPORTED_FILE_TYPES, validateFiles } from "../../../utils/fileUtils";
 import {
   testContainerStyle,
   testSectionStyle,
