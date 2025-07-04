@@ -4,7 +4,7 @@ import { Button } from "../UI/Button";
 import { Accordion } from "../UI/Accordion";
 import { FaTrash } from "react-icons/fa6";
 import { IoClose } from "react-icons/io5";
-import { useSettingsDialogStore } from "../../store";
+import { useSettingsDialogStore, useSettingsStore } from "../../store";
 import {
   overlayStyle,
   settingsDialogStyle,
@@ -72,12 +72,21 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
     loadData,
   } = useSettingsDialogStore();
 
+  // Settings store for model preferences
+  const {
+    settings,
+    loading: settingsLoading,
+    reloadSettings,
+    saveSettings,
+  } = useSettingsStore();
+
   // Load data when dialog opens
   useEffect(() => {
     if (isOpen) {
       loadData();
+      reloadSettings();
     }
-  }, [isOpen, loadData]);
+  }, [isOpen, loadData, reloadSettings]);
 
   if (!isOpen) return null;
 
@@ -181,6 +190,37 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   Save Memory
                 </Button>
               </>
+            )}
+          </Accordion>
+
+          {/* Model Selection Settings */}
+          <Accordion
+            title="Model Selection"
+            defaultOpen
+          >
+            {settingsLoading ? (
+              <div css={emptyStateStyle}>Loading settings...</div>
+            ) : (
+              <div css={memoryListStyle}>
+                <div css={memoryItemStyle}>
+                  <label css={systemInfoLabelStyle}>
+                    <input
+                      type="checkbox"
+                      checked={settings?.auto_model_selection || false}
+                      onChange={(e) =>
+                        saveSettings({ auto_model_selection: e.target.checked })
+                      }
+                      style={{ marginRight: "8px" }}
+                    />
+                    Auto Model Selection
+                  </label>
+                  <div css={systemInfoValueStyle}>
+                    {settings?.auto_model_selection
+                      ? "AI will automatically choose the best model"
+                      : "Manual model selection in chat"}
+                  </div>
+                </div>
+              </div>
             )}
           </Accordion>
 

@@ -79,6 +79,7 @@ export interface Settings {
   message_limit: number;
   message_offset: number;
   manual_model_switch: boolean;
+  auto_model_selection: boolean;
   summarization_prompt: string;
   user_info_extraction_model: string; // "adaptive", "fast", "quality"
 }
