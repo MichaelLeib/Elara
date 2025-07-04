@@ -13,31 +13,31 @@ export type WebSearchSource = {
   domain: string;
 };
 
-export type PdfChoiceMessage = {
-  type: "pdf_choice";
+// Base message interface with common properties
+export interface BaseMessage {
   created_at: string;
   id: string;
-  user_id: string;
   message: string;
+  user_id: string;
+  files?: FileInfo[];
+  web_search_sources?: WebSearchSource[];
+}
+
+export type PdfChoiceMessage = BaseMessage & {
+  type: "pdf_choice";
   filename: string;
   file_path: string;
   prompt: string;
   model: string;
 };
 
-export type Message =
-  | {
-      type?: "default";
-      created_at: string;
-      id: string;
-      message: string;
-      model: string | Model;
-      updated_at: string;
-      user_id: string;
-      files?: FileInfo[];
-      web_search_sources?: WebSearchSource[];
-    }
-  | PdfChoiceMessage;
+export type DefaultMessage = BaseMessage & {
+  type?: "default";
+  model: string | Model;
+  updated_at: string;
+};
+
+export type Message = DefaultMessage | PdfChoiceMessage;
 
 export type MessageListProps = {
   messages: Message[];

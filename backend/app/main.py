@@ -7,7 +7,7 @@ from app.routes import chat, memory, models, system, health
 app = FastAPI(
     title="Elara Chat API",
     description="A FastAPI backend for the Elara chat application",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Setup middleware
@@ -25,4 +25,5 @@ app.include_router(health.router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

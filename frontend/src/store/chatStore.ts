@@ -223,7 +223,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         if (msg.id === messageId) {
           const updateObj =
             typeof updates === "function" ? updates(msg) : updates;
-          return { ...msg, ...updateObj };
+          return { ...msg, ...updateObj } as Message;
         }
         return msg;
       }),

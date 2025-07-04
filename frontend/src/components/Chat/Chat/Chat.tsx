@@ -67,6 +67,12 @@ export function Chat({
             onAppendToInput={handleAppendToInput}
             isPrivate={isPrivate}
             handlePdfChoice={handlePdfChoice}
+            webSearchStatus={{ isSearching: false }}
+            memoryNotification={{
+              isVisible: false,
+              message: "",
+              savedItems: [],
+            }}
           />
         </ErrorBoundary>
       </div>
