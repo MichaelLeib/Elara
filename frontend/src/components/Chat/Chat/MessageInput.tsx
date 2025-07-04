@@ -7,7 +7,7 @@ import {
   useImperativeHandle,
 } from "react";
 import type { ChangeEvent } from "react";
-import { useModelsStore, useFileHandlingStore } from "../../../store";
+import { useModelsStore, useFileHandlingStore, useSettingsStore } from "../../../store";
 import { ErrorBoundary } from "../../../ErrorBoundary";
 import type { MessageInputProps } from "../models";
 import type { Model } from "../../../store";
@@ -80,6 +80,9 @@ export const MessageInput = forwardRef<
 
   const { models, loading: isLoadingModels } = useModelsStore();
 
+  // Use the settings store to check for auto model selection
+  const { settings } = useSettingsStore();
+
   // Use the file handling store
   const {
     attachments,
@@ -138,9 +141,14 @@ export const MessageInput = forwardRef<
   }));
 
   const handleSend = () => {
-    if (!message.trim() || !selectedModel || disabled) return;
+    if (!message.trim() || disabled) return;
+    
+    // In auto mode, let the backend choose the model
+    const modelToUse = settings?.auto_model_selection ? "auto" : selectedModel?.name;
+    
+    if (!settings?.auto_model_selection && !selectedModel) return;
 
-    onSendMessage(message.trim(), selectedModel.name, attachments);
+    onSendMessage(message.trim(), modelToUse || "auto", attachments);
     setMessage("");
 
     // Clear attachments
@@ -214,7 +222,7 @@ export const MessageInput = forwardRef<
     }
   };
 
-  const isSendDisabled = !message.trim() || !selectedModel || disabled;
+  const isSendDisabled = !message.trim() || disabled || (!settings?.auto_model_selection && !selectedModel);
 
   return (
     <ErrorBoundary>
@@ -314,48 +322,50 @@ export const MessageInput = forwardRef<
           />
 
           {/* Model Selector */}
-          <div css={modelSelectorStyle}>
-            <button
-              css={modelButtonStyle}
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              disabled={disabled || isLoadingModels}
-            >
-              {selectedModel ? (
-                <>
-                  <div>
-                    <div css={modelNameStyle}>{selectedModel.name}</div>
-                    <div css={modelDescriptionStyle}>
-                      {selectedModel.description}
+          {!settings?.auto_model_selection && (
+            <div css={modelSelectorStyle}>
+              <button
+                css={modelButtonStyle}
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                disabled={disabled || isLoadingModels}
+              >
+                {selectedModel ? (
+                  <>
+                    <div>
+                      <div css={modelNameStyle}>{selectedModel.name}</div>
+                      <div css={modelDescriptionStyle}>
+                        {selectedModel.description}
+                      </div>
                     </div>
+                  </>
+                ) : (
+                  <div css={loadingSpinnerStyle}>
+                    <div css={spinnerStyle} />
+                    <span css={loadingTextStyle}>Loading models...</span>
                   </div>
-                </>
-              ) : (
-                <div css={loadingSpinnerStyle}>
-                  <div css={spinnerStyle} />
-                  <span css={loadingTextStyle}>Loading models...</span>
+                )}
+                <FaChevronDown css={dropdownIconStyle(isDropdownOpen)} />
+              </button>
+
+              {/* Model Dropdown */}
+              {isDropdownOpen && (
+                <div css={dropdownStyle}>
+                  {models.map((model) => (
+                    <button
+                      key={model.name}
+                      css={dropdownItemStyle(selectedModel?.name === model.name)}
+                      onClick={() => handleModelSelect(model)}
+                    >
+                      <div>
+                        <div css={modelNameStyle}>{model.name}</div>
+                        <div css={modelDescriptionStyle}>{model.description}</div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
               )}
-              <FaChevronDown css={dropdownIconStyle(isDropdownOpen)} />
-            </button>
-
-            {/* Model Dropdown */}
-            {isDropdownOpen && (
-              <div css={dropdownStyle}>
-                {models.map((model) => (
-                  <button
-                    key={model.name}
-                    css={dropdownItemStyle(selectedModel?.name === model.name)}
-                    onClick={() => handleModelSelect(model)}
-                  >
-                    <div>
-                      <div css={modelNameStyle}>{model.name}</div>
-                      <div css={modelDescriptionStyle}>{model.description}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Textarea */}
           <textarea

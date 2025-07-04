@@ -9,10 +9,11 @@ import { appStyle, appChatContainerStyle } from "./components/App/AppStyles";
 
 import type { PdfChoiceMessage } from "./components/Chat/models";
 import { wsManager, setPdfChoiceMessageIdRef } from "./api/chatApi";
-import { useSettingsStore, useChatStore, useUIStore } from "./store";
+import { useSettingsStore, useChatStore, useUIStore, useModelsStore } from "./store";
 
 function App() {
-  const { settings } = useSettingsStore();
+  const { settings, reloadSettings } = useSettingsStore();
+  const { reloadModels } = useModelsStore();
   const { setPdfChoiceId } = useUIStore();
 
   const {
@@ -51,6 +52,12 @@ function App() {
   useEffect(() => {
     setPdfChoiceMessageIdRef(lastPdfChoiceIdRef);
   }, []);
+
+  // Load settings on app startup
+  useEffect(() => {
+    reloadSettings();
+    reloadModels();
+  }, [reloadSettings, reloadModels]);
 
   // Handle PDF choice (OCR vs Vision)
   const handlePdfChoice = useCallback(

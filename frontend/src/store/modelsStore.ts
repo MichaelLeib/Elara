@@ -3,7 +3,7 @@ import { getModels } from "../api/chatApi";
 
 export interface Model {
   name: string;
-  description?: string;
+  description: string;
 }
 
 interface ModelsState {
@@ -21,7 +21,12 @@ export const useModelsStore = create<ModelsState>((set) => ({
     set({ loading: true, error: null });
     try {
       const res = await getModels();
-      set({ models: res.models, loading: false });
+      // Ensure all models have descriptions
+      const modelsWithDescriptions = res.models.map((model: any) => ({
+        ...model,
+        description: model.description || `AI Model: ${model.name}`
+      }));
+      set({ models: modelsWithDescriptions, loading: false });
     } catch (e) {
       set({ error: `Failed to load models: ${e}`, loading: false });
     }
