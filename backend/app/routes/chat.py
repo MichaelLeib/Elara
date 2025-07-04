@@ -36,7 +36,10 @@ router = APIRouter(prefix="/api", tags=["chat"])
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("INFO: connection open")
-
+    
+    # Initialize stop event for the entire connection lifecycle
+    stop_analysis_event = asyncio.Event()
+    
     try:
         while True:
             # Check if connection is still open before receiving
@@ -69,9 +72,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Handle stop request
                     if parsed_data.get("type") == "stop":
                         print("INFO: Received stop request from client")
-                        # Set the stop event if it exists (for file analysis)
-                        if "stop_analysis_event" in locals():
-                            stop_analysis_event.set()
+                        # Set the stop event - now guaranteed to exist
+                        stop_analysis_event.set()
                         continue
                     # Handle image_based_pdf_choice from frontend
                     if parsed_data.get("type") == "image_based_pdf_choice":
@@ -237,8 +239,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 # Handle file analysis if files are provided
                 if files and isinstance(files, list) and len(files) > 0:
-                    # Create a stop event for this analysis
-                    stop_analysis_event = asyncio.Event()
+                    # Reset the stop event for this analysis (clear any previous state)
+                    stop_analysis_event.clear()
 
                     # Use the new WebSocket file handler
                     file_handler = WebSocketFileHandler(websocket)
