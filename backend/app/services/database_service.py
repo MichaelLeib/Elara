@@ -141,28 +141,35 @@ class DatabaseService:
         metadata: Optional[Dict] = None,
         model: Optional[str] = None,
     ) -> bool:
-        """Update chat session"""
+        """Update chat session with proper parameterized queries"""
         with self._get_connection() as conn:
             updates = []
             params = []
 
-            if title:
+            if title is not None:  # Allow empty string updates
                 updates.append("title = ?")
                 params.append(title)
-            if metadata:
+            if metadata is not None:
                 updates.append("metadata = ?")
                 params.append(json.dumps(metadata))
-            if model:
+            if model is not None:
                 updates.append("model = ?")
                 params.append(model)
 
-            if updates:
-                params.append(session_id)
-                query = f"UPDATE chat_sessions SET {', '.join(updates)} WHERE id = ?"
-                conn.execute(query, params)
-                conn.commit()
-                return conn.total_changes > 0
-            return False
+            if not updates:
+                return False
+                
+            # Always update timestamp when any field is modified
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            params.append(session_id)
+            
+            # Use proper parameterized query construction
+            set_clause = ", ".join(updates)
+            query = "UPDATE chat_sessions SET " + set_clause + " WHERE id = ?"
+            
+            cursor = conn.execute(query, params)
+            conn.commit()
+            return cursor.rowcount > 0
 
     def delete_chat_session(self, session_id: str) -> bool:
         """Delete chat session and all its messages"""
