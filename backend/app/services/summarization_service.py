@@ -106,7 +106,7 @@ CRITICAL: Respond with ONLY the JSON object. No other text."""
                 f"[SummarizationService] Calling ollama_service.query_ollama with timeout={timeout}, prompt_len={len(prompt)}"
             )
             response = await ollama_service.query_ollama(
-                prompt=prompt, timeout=timeout, model=model or settings.OLLAMA_MODEL
+                prompt=prompt, timeout=timeout, model=model or settings.SUMMARY_MODEL
             )
             print(f"[SummarizationService] Summary generation completed successfully")
 
@@ -265,7 +265,7 @@ CRITICAL: Respond with ONLY the JSON object. No other text."""
             response = await ollama_service.query_ollama(
                 prompt=session_prompt,
                 timeout=60.0,
-                model=model or settings.OLLAMA_MODEL,
+                model=model or settings.SUMMARY_MODEL,
             )
 
             try:

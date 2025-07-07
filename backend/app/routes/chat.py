@@ -99,13 +99,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         continue
                 else:
                     message = data or ""
-                    model = settings.OLLAMA_MODEL
+                    model = settings.CHAT_MODEL
                     session_id = None
                     is_private = True
                     files = None
             except json.JSONDecodeError:
                 message = data or ""
-                model = settings.OLLAMA_MODEL
+                model = settings.CHAT_MODEL
                 session_id = None
                 is_private = True
                 files = None
@@ -476,9 +476,9 @@ async def create_chat_session(request: ChatSessionRequest):
     """Create a new chat session"""
     try:
         title = request.title or "New Chat"
-        session_id = database_service.create_chat_session(
-            title=title, model=settings.OLLAMA_MODEL, is_private=request.isPrivate
-        )
+            session_id = database_service.create_chat_session(
+        title=title, model=settings.CHAT_MODEL, is_private=request.isPrivate
+    )
         session = database_service.get_chat_session(session_id)
         return {
             "status": "success",
