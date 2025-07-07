@@ -17,12 +17,22 @@ from app.models.schemas import (
     DocumentAnalysisResponse,
     ImageAnalysisRequest,
     ImageAnalysisResponse,
+    DocumentCreationRequest,
+    DocumentCreationResponse,
+    DocumentModificationRequest,
+    DocumentModificationResponse,
+    ImageCreationRequest,
+    ImageCreationResponse,
+    ImageModificationRequest,
+    ImageModificationResponse,
 )
 from app.services.ollama_service import ollama_service
 from app.services.summarization_service import summarization_service
 from app.services.context_service import context_service
 from app.services.document_service import document_service
 from app.services.image_service import image_service
+from app.services.document_creation_service import document_creation_service
+from app.services.image_creation_service import image_creation_service
 from app.services.websocket_file_handler import WebSocketFileHandler
 from app.services.user_info_extractor import user_info_extractor
 from app.services.web_search_service import web_search_service
@@ -96,6 +106,130 @@ async def websocket_endpoint(websocket: WebSocket):
                             session_id=session_id,
                             is_private=is_private,
                         )
+                        continue
+                    
+                    # Handle document creation requests
+                    if parsed_data.get("type") == "create_document":
+                        prompt = str(parsed_data.get("prompt") or "")
+                        format_type = str(parsed_data.get("format_type") or "docx")
+                        model = str(parsed_data.get("model") or settings.OLLAMA_MODEL)
+                        session_id = parsed_data.get("session_id", None)
+                        is_private = parsed_data.get("isPrivate", True)
+                        base_content = parsed_data.get("base_content", None)
+                        
+                        file_handler = WebSocketFileHandler(websocket)
+                        try:
+                            await file_handler.handle_document_creation(
+                                prompt=prompt,
+                                format_type=format_type,
+                                model=model,
+                                session_id=session_id,
+                                is_private=is_private,
+                                base_content=base_content,
+                                stop_event=stop_analysis_event,
+                            )
+                        except Exception as e:
+                            print(f"Document creation error: {e}")
+                        continue
+                    
+                    # Handle document modification requests
+                    if parsed_data.get("type") == "modify_document":
+                        import base64
+                        file_data = parsed_data.get("file", {})
+                        filename = file_data.get("filename", "document.txt")
+                        
+                        # Handle base64 encoded content
+                        if "content" in file_data:
+                            try:
+                                file_content = base64.b64decode(file_data["content"])
+                            except Exception:
+                                file_content = file_data["content"].encode() if isinstance(file_data["content"], str) else file_data["content"]
+                        else:
+                            print("No file content provided for document modification")
+                            continue
+                            
+                        modification_prompt = str(parsed_data.get("modification_prompt") or "")
+                        model = str(parsed_data.get("model") or settings.OLLAMA_MODEL)
+                        session_id = parsed_data.get("session_id", None)
+                        is_private = parsed_data.get("isPrivate", True)
+                        
+                        file_handler = WebSocketFileHandler(websocket)
+                        try:
+                            await file_handler.handle_document_modification(
+                                file_content=file_content,
+                                filename=filename,
+                                modification_prompt=modification_prompt,
+                                model=model,
+                                session_id=session_id,
+                                is_private=is_private,
+                                stop_event=stop_analysis_event,
+                            )
+                        except Exception as e:
+                            print(f"Document modification error: {e}")
+                        continue
+                    
+                    # Handle image creation requests
+                    if parsed_data.get("type") == "create_image":
+                        prompt = str(parsed_data.get("prompt") or "")
+                        style = str(parsed_data.get("style") or "realistic")
+                        size = parsed_data.get("size", None)
+                        if size and isinstance(size, list) and len(size) == 2:
+                            size = tuple(size)
+                        format_type = str(parsed_data.get("format_type") or "png")
+                        model = str(parsed_data.get("model") or settings.OLLAMA_MODEL)
+                        session_id = parsed_data.get("session_id", None)
+                        is_private = parsed_data.get("isPrivate", True)
+                        
+                        file_handler = WebSocketFileHandler(websocket)
+                        try:
+                            await file_handler.handle_image_creation(
+                                prompt=prompt,
+                                style=style,
+                                size=size,
+                                format_type=format_type,
+                                model=model,
+                                session_id=session_id,
+                                is_private=is_private,
+                                stop_event=stop_analysis_event,
+                            )
+                        except Exception as e:
+                            print(f"Image creation error: {e}")
+                        continue
+                    
+                    # Handle image modification requests
+                    if parsed_data.get("type") == "modify_image":
+                        import base64
+                        file_data = parsed_data.get("file", {})
+                        filename = file_data.get("filename", "image.png")
+                        
+                        # Handle base64 encoded content
+                        if "content" in file_data:
+                            try:
+                                file_content = base64.b64decode(file_data["content"])
+                            except Exception:
+                                file_content = file_data["content"].encode() if isinstance(file_data["content"], str) else file_data["content"]
+                        else:
+                            print("No file content provided for image modification")
+                            continue
+                            
+                        modification_prompt = str(parsed_data.get("modification_prompt") or "")
+                        model = str(parsed_data.get("model") or settings.OLLAMA_MODEL)
+                        session_id = parsed_data.get("session_id", None)
+                        is_private = parsed_data.get("isPrivate", True)
+                        
+                        file_handler = WebSocketFileHandler(websocket)
+                        try:
+                            await file_handler.handle_image_modification(
+                                file_content=file_content,
+                                filename=filename,
+                                modification_prompt=modification_prompt,
+                                model=model,
+                                session_id=session_id,
+                                is_private=is_private,
+                                stop_event=stop_analysis_event,
+                            )
+                        except Exception as e:
+                            print(f"Image modification error: {e}")
                         continue
                 else:
                     message = data or ""
@@ -1045,3 +1179,134 @@ async def check_web_search_needed(message: str, context: str = ""):
         raise HTTPException(
             status_code=500, detail=f"Failed to check web search need: {str(e)}"
         )
+
+
+# Document and Image Creation/Modification Endpoints
+
+@router.post("/create-document", response_model=DocumentCreationResponse)
+async def create_document_endpoint(request: DocumentCreationRequest):
+    """Create a new document from a text prompt"""
+    try:
+        result = await document_creation_service.create_document_from_prompt(
+            prompt=request.prompt,
+            format_type=request.format_type,
+            model=request.model,
+            base_content=request.base_content
+        )
+        
+        return DocumentCreationResponse(**result)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create document: {str(e)}"
+        )
+
+
+@router.post("/modify-document", response_model=DocumentModificationResponse)
+async def modify_document_endpoint(request: DocumentModificationRequest):
+    """Modify an existing document based on a prompt"""
+    try:
+        # Extract file content from request
+        file_data = request.file
+        filename = file_data.get("filename", "document.txt")
+        
+        # Handle base64 encoded content
+        if "content" in file_data:
+            import base64
+            try:
+                file_content = base64.b64decode(file_data["content"])
+            except Exception:
+                # If not base64, treat as raw bytes
+                file_content = file_data["content"].encode() if isinstance(file_data["content"], str) else file_data["content"]
+        else:
+            raise HTTPException(status_code=400, detail="File content is required")
+        
+        result = await document_creation_service.modify_document(
+            file_content=file_content,
+            filename=filename,
+            modification_prompt=request.modification_prompt,
+            model=request.model
+        )
+        
+        return DocumentModificationResponse(**result)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to modify document: {str(e)}"
+        )
+
+
+@router.post("/create-image", response_model=ImageCreationResponse)
+async def create_image_endpoint(request: ImageCreationRequest):
+    """Create a new image from a text prompt"""
+    try:
+        # Convert size list to tuple if provided
+        size = tuple(request.size) if request.size else None
+        
+        result = await image_creation_service.create_image_from_prompt(
+            prompt=request.prompt,
+            style=request.style,
+            size=size,
+            format_type=request.format_type,
+            model=request.model
+        )
+        
+        # Convert size tuple back to list for response
+        if result.get("size"):
+            result["size"] = list(result["size"])
+        
+        return ImageCreationResponse(**result)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to create image: {str(e)}"
+        )
+
+
+@router.post("/modify-image", response_model=ImageModificationResponse)
+async def modify_image_endpoint(request: ImageModificationRequest):
+    """Modify an existing image based on a prompt"""
+    try:
+        # Extract file content from request
+        file_data = request.file
+        filename = file_data.get("filename", "image.png")
+        
+        # Handle base64 encoded content
+        if "content" in file_data:
+            import base64
+            try:
+                file_content = base64.b64decode(file_data["content"])
+            except Exception:
+                # If not base64, treat as raw bytes
+                file_content = file_data["content"].encode() if isinstance(file_data["content"], str) else file_data["content"]
+        else:
+            raise HTTPException(status_code=400, detail="File content is required")
+        
+        result = await image_creation_service.modify_image(
+            file_content=file_content,
+            filename=filename,
+            modification_prompt=request.modification_prompt,
+            model=request.model
+        )
+        
+        return ImageModificationResponse(**result)
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to modify image: {str(e)}"
+        )
+
+
+@router.get("/creation-formats")
+async def get_creation_formats():
+    """Get supported file formats for creation and modification"""
+    return {
+        "document_formats": {
+            "creation": list(document_creation_service.SUPPORTED_CREATION_FORMATS.keys()),
+            "modification": list(document_creation_service.SUPPORTED_CREATION_FORMATS.keys())
+        },
+        "image_formats": {
+            "creation": list(image_creation_service.SUPPORTED_OUTPUT_FORMATS.keys()),
+            "modification": list(image_creation_service.SUPPORTED_OUTPUT_FORMATS.keys())
+        }
+    }
