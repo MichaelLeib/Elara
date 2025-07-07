@@ -190,3 +190,77 @@ class SummaryInsightsResponse(BaseModel):
     status: str
     insights: List[str]
     total_count: int
+
+
+# Document and Image Creation/Modification models
+class DocumentCreationRequest(BaseModel):
+    prompt: str
+    format_type: str = "docx"  # docx, txt, md, csv, json, xml, html
+    model: Optional[str] = None
+    base_content: Optional[str] = None  # Optional starting content
+
+
+class DocumentCreationResponse(BaseModel):
+    status: str
+    file_path: Optional[str] = None
+    content: Optional[str] = None
+    format: Optional[str] = None
+    size: Optional[int] = None
+    filename: Optional[str] = None
+    error: Optional[str] = None
+    message: Optional[str] = None
+
+
+class DocumentModificationRequest(BaseModel):
+    file: dict  # File object with filename and content (bytes)
+    modification_prompt: str
+    model: Optional[str] = None
+
+
+class DocumentModificationResponse(BaseModel):
+    status: str
+    file_path: Optional[str] = None
+    original_content: Optional[str] = None
+    modified_content: Optional[str] = None
+    format: Optional[str] = None
+    size: Optional[int] = None
+    filename: Optional[str] = None
+    error: Optional[str] = None
+    message: Optional[str] = None
+
+
+class ImageCreationRequest(BaseModel):
+    prompt: str
+    style: str = "realistic"  # realistic, artistic, simple, etc.
+    size: Optional[List[int]] = None  # [width, height]
+    format_type: str = "png"  # png, jpg, jpeg, bmp, webp, tiff
+    model: Optional[str] = None
+
+
+class ImageCreationResponse(BaseModel):
+    status: str
+    file_path: Optional[str] = None
+    specifications: Optional[dict] = None
+    format: Optional[str] = None
+    size: Optional[List[int]] = None
+    file_size: Optional[int] = None
+    filename: Optional[str] = None
+    error: Optional[str] = None
+    message: Optional[str] = None
+
+
+class ImageModificationRequest(BaseModel):
+    file: dict  # File object with filename and content (bytes)
+    modification_prompt: str
+    model: Optional[str] = None
+
+
+class ImageModificationResponse(BaseModel):
+    status: str
+    file_path: Optional[str] = None
+    original_info: Optional[dict] = None
+    modifications: Optional[dict] = None
+    file_size: Optional[int] = None
+    filename: Optional[str] = None
+    error: Optional[str] = None
+    message: Optional[str] = None

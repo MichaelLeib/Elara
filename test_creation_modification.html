@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document & Image Creation/Modification Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        h2 {
+            color: #555;
+            margin-bottom: 15px;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px 5px 5px 0;
+        }
+        button:hover:not(:disabled) {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .results {
+            background: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .size-inputs {
+            display: flex;
+            gap: 10px;
+        }
+        .size-inputs input {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Document & Image Creation/Modification Test</h1>
+        
+        <!-- WebSocket Connection -->
+        <div class="section">
+            <h2>WebSocket Connection</h2>
+            <div id="connectionStatus" class="status disconnected">🔴 Disconnected</div>
+            <button id="connectBtn" onclick="connectWebSocket()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnectWebSocket()" disabled>Disconnect</button>
+        </div>
+
+        <!-- Document Creation -->
+        <div class="section">
+            <h2>Document Creation</h2>
+            <textarea id="docPrompt" placeholder="Enter document creation prompt..."></textarea>
+            <select id="docFormat">
+                <option value="docx">DOCX</option>
+                <option value="txt">TXT</option>
+                <option value="md">Markdown</option>
+                <option value="html">HTML</option>
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+            </select>
+            <textarea id="docBaseContent" placeholder="Base content (optional)..."></textarea>
+            <button onclick="handleDocumentCreation()">Create Document</button>
+        </div>
+
+        <!-- Document Modification -->
+        <div class="section">
+            <h2>Document Modification</h2>
+            <input type="file" id="docModFile" accept=".docx,.txt,.md,.html,.csv,.json">
+            <textarea id="docModPrompt" placeholder="Enter modification instructions..."></textarea>
+            <button onclick="handleDocumentModification()">Modify Document</button>
+        </div>
+
+        <!-- Image Creation -->
+        <div class="section">
+            <h2>Image Creation</h2>
+            <textarea id="imgPrompt" placeholder="Enter image creation prompt..."></textarea>
+            <select id="imgStyle">
+                <option value="realistic">Realistic</option>
+                <option value="artistic">Artistic</option>
+                <option value="simple">Simple</option>
+                <option value="abstract">Abstract</option>
+            </select>
+            <div class="size-inputs">
+                <input type="number" id="imgWidth" placeholder="Width" value="1024">
+                <input type="number" id="imgHeight" placeholder="Height" value="768">
+            </div>
+            <select id="imgFormat">
+                <option value="png">PNG</option>
+                <option value="jpg">JPG</option>
+                <option value="bmp">BMP</option>
+                <option value="webp">WebP</option>
+            </select>
+            <button onclick="handleImageCreation()">Create Image</button>
+        </div>
+
+        <!-- Image Modification -->
+        <div class="section">
+            <h2>Image Modification</h2>
+            <input type="file" id="imgModFile" accept=".png,.jpg,.jpeg,.bmp,.webp,.gif,.tiff">
+            <textarea id="imgModPrompt" placeholder="Enter image modification instructions..."></textarea>
+            <button onclick="handleImageModification()">Modify Image</button>
+        </div>
+
+        <!-- Results -->
+        <div class="section">
+            <h2>Results</h2>
+            <button onclick="clearResults()">Clear Results</button>
+            <div id="results" class="results">No results yet...</div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+
+        function connectWebSocket() {
+            ws = new WebSocket('ws://localhost:8000/api/chat');
+            
+            ws.onopen = function() {
+                isConnected = true;
+                updateConnectionStatus();
+                addResult('✅ Connected to WebSocket');
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    addResult(`📥 Received: ${JSON.stringify(data, null, 2)}`);
+                } catch (e) {
+                    addResult(`📥 Raw message: ${event.data}`);
+                }
+            };
+
+            ws.onclose = function() {
+                isConnected = false;
+                updateConnectionStatus();
+                addResult('❌ WebSocket disconnected');
+            };
+
+            ws.onerror = function(error) {
+                addResult(`❌ WebSocket error: ${error}`);
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function updateConnectionStatus() {
+            const statusEl = document.getElementById('connectionStatus');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+
+            if (isConnected) {
+                statusEl.textContent = '🟢 Connected';
+                statusEl.className = 'status connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                statusEl.textContent = '🔴 Disconnected';
+                statusEl.className = 'status disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        function addResult(message) {
+            const resultsEl = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString();
+            const newMessage = `${timestamp} - ${message}\n`;
+            
+            if (resultsEl.textContent === 'No results yet...') {
+                resultsEl.textContent = newMessage;
+            } else {
+                resultsEl.textContent += newMessage;
+            }
+            
+            resultsEl.scrollTop = resultsEl.scrollHeight;
+        }
+
+        function clearResults() {
+            document.getElementById('results').textContent = 'No results yet...';
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function() {
+                    const base64 = reader.result.split(',')[1]; // Remove data:type;base64, prefix
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function handleDocumentCreation() {
+            if (!ws || !isConnected) {
+                addResult('❌ Please connect WebSocket first');
+                return;
+            }
+
+            const prompt = document.getElementById('docPrompt').value.trim();
+            if (!prompt) {
+                addResult('❌ Please enter a document creation prompt');
+                return;
+            }
+
+            const message = {
+                type: 'create_document',
+                prompt: prompt,
+                format_type: document.getElementById('docFormat').value,
+                base_content: document.getElementById('docBaseContent').value || null,
+                model: 'phi3:mini',
+                isPrivate: true
+            };
+
+            ws.send(JSON.stringify(message));
+            addResult(`📤 Sent document creation request: ${prompt.substring(0, 50)}...`);
+        }
+
+        async function handleDocumentModification() {
+            if (!ws || !isConnected) {
+                addResult('❌ Please connect WebSocket first');
+                return;
+            }
+
+            const file = document.getElementById('docModFile').files[0];
+            const prompt = document.getElementById('docModPrompt').value.trim();
+            
+            if (!file || !prompt) {
+                addResult('❌ Please select a file and enter modification instructions');
+                return;
+            }
+
+            try {
+                const base64Content = await fileToBase64(file);
+                
+                const message = {
+                    type: 'modify_document',
+                    file: {
+                        filename: file.name,
+                        content: base64Content
+                    },
+                    modification_prompt: prompt,
+                    model: 'phi3:mini',
+                    isPrivate: true
+                };
+
+                ws.send(JSON.stringify(message));
+                addResult(`📤 Sent document modification request for: ${file.name}`);
+            } catch (error) {
+                addResult(`❌ Error reading file: ${error}`);
+            }
+        }
+
+        async function handleImageCreation() {
+            if (!ws || !isConnected) {
+                addResult('❌ Please connect WebSocket first');
+                return;
+            }
+
+            const prompt = document.getElementById('imgPrompt').value.trim();
+            if (!prompt) {
+                addResult('❌ Please enter an image creation prompt');
+                return;
+            }
+
+            const message = {
+                type: 'create_image',
+                prompt: prompt,
+                style: document.getElementById('imgStyle').value,
+                size: [
+                    parseInt(document.getElementById('imgWidth').value),
+                    parseInt(document.getElementById('imgHeight').value)
+                ],
+                format_type: document.getElementById('imgFormat').value,
+                model: 'phi3:mini',
+                isPrivate: true
+            };
+
+            ws.send(JSON.stringify(message));
+            addResult(`📤 Sent image creation request: ${prompt.substring(0, 50)}...`);
+        }
+
+        async function handleImageModification() {
+            if (!ws || !isConnected) {
+                addResult('❌ Please connect WebSocket first');
+                return;
+            }
+
+            const file = document.getElementById('imgModFile').files[0];
+            const prompt = document.getElementById('imgModPrompt').value.trim();
+            
+            if (!file || !prompt) {
+                addResult('❌ Please select an image and enter modification instructions');
+                return;
+            }
+
+            try {
+                const base64Content = await fileToBase64(file);
+                
+                const message = {
+                    type: 'modify_image',
+                    file: {
+                        filename: file.name,
+                        content: base64Content
+                    },
+                    modification_prompt: prompt,
+                    model: 'phi3:mini',
+                    isPrivate: true
+                };
+
+                ws.send(JSON.stringify(message));
+                addResult(`📤 Sent image modification request for: ${file.name}`);
+            } catch (error) {
+                addResult(`❌ Error reading file: ${error}`);
+            }
+        }
+
+        // Initialize
+        updateConnectionStatus();
+    </script>
+</body>
+</html>

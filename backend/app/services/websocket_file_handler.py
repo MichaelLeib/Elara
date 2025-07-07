@@ -4,6 +4,8 @@ from typing import Union, List, Dict, Any, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.services.document_service import document_service, ModelRegistry
 from app.services.image_service import image_service, ImageModelRegistry
+from app.services.document_creation_service import document_creation_service
+from app.services.image_creation_service import image_creation_service
 from app.services.database_service import database_service
 from app.services.summarization_service import summarization_service
 
@@ -938,3 +940,325 @@ Please provide a comprehensive analysis addressing the user's question:"""
             if ModelRegistry.is_small_model(current_model):
                 return "For better document analysis, consider using: phi3:mini, llama3:latest, or dolphin-mistral:7b"
         return ""
+
+    async def handle_document_creation(
+        self,
+        prompt: str,
+        format_type: str,
+        model: str,
+        session_id: Optional[str],
+        is_private: bool,
+        base_content: Optional[str] = None,
+        stop_event: Optional[asyncio.Event] = None,
+    ) -> None:
+        """Handle document creation workflow via WebSocket"""
+        try:
+            await self.send_status("Starting document creation...", 5)
+            
+            # Create progress callback
+            progress_callback = self.create_progress_callback()
+            
+            # Create the document
+            result = await document_creation_service.create_document_from_prompt(
+                prompt=prompt,
+                format_type=format_type,
+                model=model,
+                base_content=base_content,
+                progress_callback=progress_callback,
+                stop_event=stop_event,
+            )
+            
+            if result["status"] == "success":
+                # Send file information
+                creation_message = {
+                    "type": "document_created",
+                    "content": f"Document created successfully!\n\nFilename: {result['filename']}\nFormat: {result['format']}\nSize: {result['size']} bytes",
+                    "file_info": {
+                        "filename": result["filename"],
+                        "format": result["format"],
+                        "size": result["size"],
+                        "file_path": result["file_path"]
+                    },
+                    "progress": 100,
+                    "done": True,
+                }
+                
+                await self._safe_send(json.dumps(creation_message))
+                
+                # Create session and save messages
+                session_id, user_message_id, assistant_message_id = (
+                    await self.create_session_and_save_messages(
+                        session_id,
+                        f"Create {format_type} document: {prompt}",
+                        model,
+                        is_private,
+                        [],  # No input files for creation
+                        {"analysis": f"Document created successfully: {result['filename']}"}, 
+                        "document_creation",
+                    )
+                )
+                
+                # Generate summary in background
+                asyncio.create_task(
+                    self.generate_summary_background(
+                        session_id,
+                        user_message_id,
+                        assistant_message_id,
+                        f"Create {format_type} document: {prompt}",
+                        {"analysis": f"Document created successfully: {result['filename']}"},
+                        model,
+                        "document_creation",
+                    )
+                )
+                
+            else:
+                await self.send_error(f"Document creation failed: {result.get('message', 'Unknown error')}")
+                
+        except Exception as e:
+            if "stopped by user request" in str(e):
+                await self.send_status("Document creation stopped by user request", 100)
+            else:
+                await self.send_error(f"Document creation failed: {str(e)}")
+                raise
+
+    async def handle_document_modification(
+        self,
+        file_content: bytes,
+        filename: str,
+        modification_prompt: str,
+        model: str,
+        session_id: Optional[str],
+        is_private: bool,
+        stop_event: Optional[asyncio.Event] = None,
+    ) -> None:
+        """Handle document modification workflow via WebSocket"""
+        try:
+            await self.send_status("Starting document modification...", 5)
+            
+            # Create progress callback
+            progress_callback = self.create_progress_callback()
+            
+            # Modify the document
+            result = await document_creation_service.modify_document(
+                file_content=file_content,
+                filename=filename,
+                modification_prompt=modification_prompt,
+                model=model,
+                progress_callback=progress_callback,
+                stop_event=stop_event,
+            )
+            
+            if result["status"] == "success":
+                # Send file information
+                modification_message = {
+                    "type": "document_modified",
+                    "content": f"Document modified successfully!\n\nOriginal: {filename}\nModified: {result['filename']}\nFormat: {result['format']}\nSize: {result['size']} bytes",
+                    "file_info": {
+                        "filename": result["filename"],
+                        "format": result["format"],
+                        "size": result["size"],
+                        "file_path": result["file_path"]
+                    },
+                    "progress": 100,
+                    "done": True,
+                }
+                
+                await self._safe_send(json.dumps(modification_message))
+                
+                # Create session and save messages  
+                session_id, user_message_id, assistant_message_id = (
+                    await self.create_session_and_save_messages(
+                        session_id,
+                        f"Modify document '{filename}': {modification_prompt}",
+                        model,
+                        is_private,
+                        [{"filename": filename, "content": ""}],  # Include original file reference
+                        {"analysis": f"Document modified successfully: {result['filename']}"},
+                        "document_modification",
+                    )
+                )
+                
+                # Generate summary in background
+                asyncio.create_task(
+                    self.generate_summary_background(
+                        session_id,
+                        user_message_id,
+                        assistant_message_id,
+                        f"Modify document '{filename}': {modification_prompt}",
+                        {"analysis": f"Document modified successfully: {result['filename']}"},
+                        model,
+                        "document_modification",
+                    )
+                )
+                
+            else:
+                await self.send_error(f"Document modification failed: {result.get('message', 'Unknown error')}")
+                
+        except Exception as e:
+            if "stopped by user request" in str(e):
+                await self.send_status("Document modification stopped by user request", 100)
+            else:
+                await self.send_error(f"Document modification failed: {str(e)}")
+                raise
+
+    async def handle_image_creation(
+        self,
+        prompt: str,
+        style: str,
+        size: Optional[tuple],
+        format_type: str,
+        model: str,
+        session_id: Optional[str],
+        is_private: bool,
+        stop_event: Optional[asyncio.Event] = None,
+    ) -> None:
+        """Handle image creation workflow via WebSocket"""
+        try:
+            await self.send_status("Starting image creation...", 5)
+            
+            # Create progress callback
+            progress_callback = self.create_progress_callback()
+            
+            # Create the image
+            result = await image_creation_service.create_image_from_prompt(
+                prompt=prompt,
+                style=style,
+                size=size,
+                format_type=format_type,
+                model=model,
+                progress_callback=progress_callback,
+                stop_event=stop_event,
+            )
+            
+            if result["status"] == "success":
+                # Send file information
+                creation_message = {
+                    "type": "image_created",
+                    "content": f"Image created successfully!\n\nFilename: {result['filename']}\nFormat: {result['format']}\nSize: {result['size']}\nFile Size: {result['file_size']} bytes",
+                    "file_info": {
+                        "filename": result["filename"],
+                        "format": result["format"],
+                        "size": result["size"],
+                        "file_size": result["file_size"],
+                        "file_path": result["file_path"]
+                    },
+                    "progress": 100,
+                    "done": True,
+                }
+                
+                await self._safe_send(json.dumps(creation_message))
+                
+                # Create session and save messages
+                session_id, user_message_id, assistant_message_id = (
+                    await self.create_session_and_save_messages(
+                        session_id,
+                        f"Create {style} {format_type} image: {prompt}",
+                        model,
+                        is_private,
+                        [],  # No input files for creation
+                        {"analysis": f"Image created successfully: {result['filename']}"},
+                        "image_creation",
+                    )
+                )
+                
+                # Generate summary in background
+                asyncio.create_task(
+                    self.generate_summary_background(
+                        session_id,
+                        user_message_id,
+                        assistant_message_id,
+                        f"Create {style} {format_type} image: {prompt}",
+                        {"analysis": f"Image created successfully: {result['filename']}"},
+                        model,
+                        "image_creation",
+                    )
+                )
+                
+            else:
+                await self.send_error(f"Image creation failed: {result.get('message', 'Unknown error')}")
+                
+        except Exception as e:
+            if "stopped by user request" in str(e):
+                await self.send_status("Image creation stopped by user request", 100)
+            else:
+                await self.send_error(f"Image creation failed: {str(e)}")
+                raise
+
+    async def handle_image_modification(
+        self,
+        file_content: bytes,
+        filename: str,
+        modification_prompt: str,
+        model: str,
+        session_id: Optional[str],
+        is_private: bool,
+        stop_event: Optional[asyncio.Event] = None,
+    ) -> None:
+        """Handle image modification workflow via WebSocket"""
+        try:
+            await self.send_status("Starting image modification...", 5)
+            
+            # Create progress callback
+            progress_callback = self.create_progress_callback()
+            
+            # Modify the image
+            result = await image_creation_service.modify_image(
+                file_content=file_content,
+                filename=filename,
+                modification_prompt=modification_prompt,
+                model=model,
+                progress_callback=progress_callback,
+                stop_event=stop_event,
+            )
+            
+            if result["status"] == "success":
+                # Send file information
+                modification_message = {
+                    "type": "image_modified",
+                    "content": f"Image modified successfully!\n\nOriginal: {filename}\nModified: {result['filename']}\nFile Size: {result['file_size']} bytes",
+                    "file_info": {
+                        "filename": result["filename"],
+                        "file_size": result["file_size"],
+                        "file_path": result["file_path"]
+                    },
+                    "progress": 100,
+                    "done": True,
+                }
+                
+                await self._safe_send(json.dumps(modification_message))
+                
+                # Create session and save messages
+                session_id, user_message_id, assistant_message_id = (
+                    await self.create_session_and_save_messages(
+                        session_id,
+                        f"Modify image '{filename}': {modification_prompt}",
+                        model,
+                        is_private,
+                        [{"filename": filename, "content": ""}],  # Include original file reference
+                        {"analysis": f"Image modified successfully: {result['filename']}"},
+                        "image_modification",
+                    )
+                )
+                
+                # Generate summary in background
+                asyncio.create_task(
+                    self.generate_summary_background(
+                        session_id,
+                        user_message_id,
+                        assistant_message_id,
+                        f"Modify image '{filename}': {modification_prompt}",
+                        {"analysis": f"Image modified successfully: {result['filename']}"},
+                        model,
+                        "image_modification",
+                    )
+                )
+                
+            else:
+                await self.send_error(f"Image modification failed: {result.get('message', 'Unknown error')}")
+                
+        except Exception as e:
+            if "stopped by user request" in str(e):
+                await self.send_status("Image modification stopped by user request", 100)
+            else:
+                await self.send_error(f"Image modification failed: {str(e)}")
+                raise
