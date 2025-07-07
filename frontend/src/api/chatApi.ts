@@ -2,6 +2,7 @@ import config from "../assets/config.json";
 import type { Model } from "../components/Chat/models";
 import { processFilesForAnalysis } from "../utils/fileUtils";
 import type {
+  AvailableModel,
   AvailableModelsResponse,
   ChatHistoryResponse,
   ChatSessionsResponse,
@@ -713,6 +714,16 @@ export async function getAvailableModels(): Promise<AvailableModelsResponse> {
     return data;
   } catch (error) {
     console.error("Error fetching models:", error);
+    throw error;
+  }
+}
+
+export async function getInstalledModels(): Promise<AvailableModel[]> {
+  try {
+    const response = await getAvailableModels();
+    return response.installed_models || [];
+  } catch (error) {
+    console.error("Error fetching installed models:", error);
     throw error;
   }
 }

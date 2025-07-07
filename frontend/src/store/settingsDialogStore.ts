@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   downloadModel,
   getAvailableModels,
+  getInstalledModels,
   getMemory,
   removeModel,
   saveMemory,
@@ -16,7 +17,9 @@ interface SettingsDialogState {
 
   // Models state
   availableModels: AvailableModel[];
+  installedModels: AvailableModel[];
   isModelsLoading: boolean;
+  isInstalledModelsLoading: boolean;
   modelsError: string | null;
   downloadingModels: Set<string>;
   removingModels: Set<string>;
@@ -39,6 +42,7 @@ interface SettingsDialogState {
   // Model actions
   downloadModelHandler: (modelName: string) => Promise<void>;
   removeModelHandler: (modelName: string) => Promise<void>;
+  loadInstalledModels: () => Promise<void>;
 
   // Data loading
   loadData: () => Promise<void>;
@@ -51,7 +55,9 @@ export const useSettingsDialogStore = create<SettingsDialogState>(
     isMemoryLoading: false,
     memoryError: null,
     availableModels: [],
+    installedModels: [],
     isModelsLoading: false,
+    isInstalledModelsLoading: false,
     modelsError: null,
     downloadingModels: new Set(),
     removingModels: new Set(),
@@ -145,6 +151,19 @@ export const useSettingsDialogStore = create<SettingsDialogState>(
       }
     },
 
+    loadInstalledModels: async () => {
+      try {
+        set({ isInstalledModelsLoading: true });
+        const installedModels = await getInstalledModels();
+        set({ installedModels });
+      } catch (error) {
+        console.error("Error loading installed models:", error);
+        set({ modelsError: "Failed to load installed models" });
+      } finally {
+        set({ isInstalledModelsLoading: false });
+      }
+    },
+
     // Data loading
     loadData: async () => {
       try {
@@ -161,6 +180,11 @@ export const useSettingsDialogStore = create<SettingsDialogState>(
           isModelsLoading: false,
         });
 
+        // Load installed models
+        set({ isInstalledModelsLoading: true });
+        const installedModels = await getInstalledModels();
+        set({ installedModels, isInstalledModelsLoading: false });
+
         // Load system info
         set({ isSystemInfoLoading: true, systemInfoError: null });
         set({
@@ -175,6 +199,7 @@ export const useSettingsDialogStore = create<SettingsDialogState>(
           systemInfoError: "Failed to load system info",
           isMemoryLoading: false,
           isModelsLoading: false,
+          isInstalledModelsLoading: false,
           isSystemInfoLoading: false,
         });
       }

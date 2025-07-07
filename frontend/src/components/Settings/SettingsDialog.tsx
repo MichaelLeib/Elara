@@ -39,6 +39,45 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
+// Model configuration types and their descriptions
+const MODEL_CONFIGS = [
+  {
+    key: "CHAT_MODEL",
+    title: "Chat Model",
+    description: "Main model used for general conversation and chat responses",
+  },
+  {
+    key: "FAST_MODEL", 
+    title: "Fast Model",
+    description: "Lightweight model for quick responses and simple tasks",
+  },
+  {
+    key: "SUMMARY_MODEL",
+    title: "Summary Model", 
+    description: "Model specialized for text summarization and content analysis",
+  },
+  {
+    key: "USER_INFO_EXTRACTION_MODEL",
+    title: "User Info Extraction Model",
+    description: "Model for extracting and analyzing user information from text",
+  },
+  {
+    key: "WEB_SEARCH_DECISION_MODEL",
+    title: "Web Search Decision Model",
+    description: "Model that decides when to perform web searches",
+  },
+  {
+    key: "DOCUMENT_ANALYSIS_MODEL", 
+    title: "Document Analysis Model",
+    description: "Model for analyzing and processing document content",
+  },
+  {
+    key: "VISION_DEFAULT_MODEL",
+    title: "Vision Model",
+    description: "Model for image analysis and visual understanding",
+  },
+] as const;
+
 export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const {
     // Memory state
@@ -48,7 +87,9 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
 
     // Models state
     availableModels,
+    installedModels,
     isModelsLoading,
+    isInstalledModelsLoading,
     modelsError,
     downloadingModels,
     removingModels,
@@ -220,6 +261,48 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       : "Manual model selection in chat"}
                   </div>
                 </div>
+              </div>
+            )}
+          </Accordion>
+
+          {/* Model Configuration */}
+          <Accordion
+            title="Model Configuration"
+            defaultOpen
+          >
+            {settingsLoading || isInstalledModelsLoading ? (
+              <div css={emptyStateStyle}>Loading model configuration...</div>
+            ) : (
+              <div css={memoryListStyle}>
+                {MODEL_CONFIGS.map((config) => (
+                  <Accordion
+                    key={config.key}
+                    title={config.title}
+                  >
+                    <div css={memoryItemStyle}>
+                      <div css={systemInfoLabelStyle}>{config.description}</div>
+                      <select
+                        css={inputStyle}
+                        value={settings?.[config.key as keyof typeof settings] || ""}
+                        onChange={(e) =>
+                          saveSettings({ [config.key]: e.target.value })
+                        }
+                      >
+                        <option value="">Select a model...</option>
+                        {installedModels.map((model) => (
+                          <option key={model.name} value={model.name}>
+                            {model.name}
+                          </option>
+                        ))}
+                      </select>
+                      {installedModels.length === 0 && (
+                        <div css={emptyStateStyle}>
+                          No installed models available. Install models first.
+                        </div>
+                      )}
+                    </div>
+                  </Accordion>
+                ))}
               </div>
             )}
           </Accordion>
