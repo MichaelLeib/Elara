@@ -530,7 +530,7 @@ class DocumentService:
         stop_event: Optional[asyncio.Event] = None,
     ) -> Dict[str, Any]:
         if model is None:
-            model = settings.OLLAMA_MODEL
+            model = settings.DOCUMENT_ANALYSIS_MODEL
 
         # Try to update model info if not in registry
         if model not in ModelRegistry.MODEL_CONTEXTS:

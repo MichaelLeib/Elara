@@ -54,8 +54,8 @@ Message: """
         try:
             # Use a smaller, faster model for extraction if available
             extraction_model = (
-                model or "tinyllama:1.1b"
-            )  # Default to a smaller model for speed
+                model or settings.USER_INFO_EXTRACTION_MODEL
+            )  # Default to configurable model for speed
 
             # Create the full prompt
             full_prompt = f"{self.extraction_prompt}{user_message}"

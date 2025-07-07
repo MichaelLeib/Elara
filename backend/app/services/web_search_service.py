@@ -310,7 +310,7 @@ If should_search is true, provide 3-5 relevant search terms."""
             response = await ollama_service.query_ollama(
                 prompt=decision_prompt,
                 timeout=30.0,
-                model="phi3:mini",  # Use small model for quick decision
+                model=settings.WEB_SEARCH_DECISION_MODEL,  # Use configurable model for quick decision
             )
 
             # Parse the response

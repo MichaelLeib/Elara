@@ -1,7 +1,17 @@
 {
   "model": {
     "OLLAMA_URL": "http://localhost:11434/api/generate",
-    "OLLAMA_MODEL": "phi3:mini"
+    "OLLAMA_MODEL": "phi3:mini",
+    "CHAT_MODEL": "phi3:mini",
+    "FAST_MODEL": "phi3:mini",
+    "SUMMARY_MODEL": "phi3:mini",
+    "USER_INFO_EXTRACTION_MODEL": "tinyllama:1.1b",
+    "WEB_SEARCH_DECISION_MODEL": "phi3:mini",
+    "DOCUMENT_ANALYSIS_MODEL": "phi3:mini"
+  },
+  "vision": {
+    "DEFAULT_MODEL": "llava:7b",
+    "FALLBACK_MODELS": ["phi3:mini", "llama3:latest", "dolphin-mistral:7b"]
   },
   "timeout": 300,
   "document": {

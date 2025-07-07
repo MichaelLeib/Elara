@@ -55,11 +55,17 @@ class ImageModelRegistry:
         },
     }
 
-    # Default vision model if none specified
-    DEFAULT_VISION_MODEL = "llava:7b"
+    @classmethod
+    def get_default_vision_model(cls) -> str:
+        """Get default vision model from settings"""
+        from app.config.settings import settings
+        return settings.VISION_DEFAULT_MODEL
 
-    # Fallback text models for when vision models are not available
-    FALLBACK_MODELS = ["phi3:mini", "llama3:latest", "dolphin-mistral:7b"]
+    @classmethod
+    def get_fallback_models(cls) -> List[str]:
+        """Get fallback models from settings"""
+        from app.config.settings import settings
+        return settings.VISION_FALLBACK_MODELS
 
     @classmethod
     def is_vision_model(cls, model_name: str) -> bool:
@@ -111,11 +117,11 @@ class ImageModelRegistry:
                     print(
                         f"[ImageModelRegistry] No vision models found. Available: {available_models}"
                     )
-                    return cls.DEFAULT_VISION_MODEL
+                    return cls.get_default_vision_model()
         except Exception as e:
             print(f"[ImageModelRegistry] Error checking available models: {e}")
 
-        return cls.DEFAULT_VISION_MODEL
+        return cls.get_default_vision_model()
 
 
 class ImageAnalysisStrategy:
