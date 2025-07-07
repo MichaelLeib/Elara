@@ -7,6 +7,14 @@ export interface Settings {
   message_offset: number;
   OLLAMA_URL: string;
   OLLAMA_MODEL: string;
+  CHAT_MODEL: string;
+  FAST_MODEL: string;
+  SUMMARY_MODEL: string;
+  USER_INFO_EXTRACTION_MODEL: string;
+  WEB_SEARCH_DECISION_MODEL: string;
+  DOCUMENT_ANALYSIS_MODEL: string;
+  VISION_DEFAULT_MODEL: string;
+  VISION_FALLBACK_MODELS: string[];
   manual_model_switch: boolean;
   auto_model_selection: boolean;
   summarization_prompt: string;
