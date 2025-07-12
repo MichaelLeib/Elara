@@ -26,7 +26,6 @@ import {
   modelActionsStyle,
   statusDownloadedStyle,
   statusNotDownloadedStyle,
-  statusDownloadingStyle,
   systemInfoStyle,
   systemInfoTitleStyle,
   systemInfoItemStyle,
@@ -47,27 +46,30 @@ const MODEL_CONFIGS = [
     description: "Main model used for general conversation and chat responses",
   },
   {
-    key: "FAST_MODEL", 
+    key: "FAST_MODEL",
     title: "Fast Model",
     description: "Lightweight model for quick responses and simple tasks",
   },
   {
     key: "SUMMARY_MODEL",
-    title: "Summary Model", 
-    description: "Model specialized for text summarization and content analysis",
+    title: "Summary Model",
+    description:
+      "Model specialized for text summarization and content analysis",
   },
   {
     key: "USER_INFO_EXTRACTION_MODEL",
     title: "User Info Extraction Model",
-    description: "Model for extracting and analyzing user information from text",
+    description:
+      "Model for extracting and analyzing user information from text",
   },
   {
-    key: "WEB_SEARCH_DECISION_MODEL",
-    title: "Web Search Decision Model",
-    description: "Model that decides when to perform web searches",
+    key: "DECISION_MODEL",
+    title: "Decision Model",
+    description:
+      "Model that decides when to perform web searches, image creation/analysis, document creation/analysis etc...",
   },
   {
-    key: "DOCUMENT_ANALYSIS_MODEL", 
+    key: "DOCUMENT_ANALYSIS_MODEL",
     title: "Document Analysis Model",
     description: "Model for analyzing and processing document content",
   },
@@ -234,37 +236,6 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             )}
           </Accordion>
 
-          {/* Model Selection Settings */}
-          <Accordion
-            title="Model Selection"
-            defaultOpen
-          >
-            {settingsLoading ? (
-              <div css={emptyStateStyle}>Loading settings...</div>
-            ) : (
-              <div css={memoryListStyle}>
-                <div css={memoryItemStyle}>
-                  <label css={systemInfoLabelStyle}>
-                    <input
-                      type="checkbox"
-                      checked={settings?.auto_model_selection || false}
-                      onChange={(e) =>
-                        saveSettings({ auto_model_selection: e.target.checked })
-                      }
-                      style={{ marginRight: "8px" }}
-                    />
-                    Auto Model Selection
-                  </label>
-                  <div css={systemInfoValueStyle}>
-                    {settings?.auto_model_selection
-                      ? "AI will automatically choose the best model"
-                      : "Manual model selection in chat"}
-                  </div>
-                </div>
-              </div>
-            )}
-          </Accordion>
-
           {/* Model Configuration */}
           <Accordion
             title="Model Configuration"
@@ -283,14 +254,21 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                       <div css={systemInfoLabelStyle}>{config.description}</div>
                       <select
                         css={inputStyle}
-                        value={settings?.[config.key as keyof typeof settings] || ""}
+                        value={
+                          settings?.[
+                            config.key as keyof typeof settings
+                          ] as string
+                        }
                         onChange={(e) =>
                           saveSettings({ [config.key]: e.target.value })
                         }
                       >
                         <option value="">Select a model...</option>
                         {installedModels.map((model) => (
-                          <option key={model.name} value={model.name}>
+                          <option
+                            key={model.name}
+                            value={model.name}
+                          >
                             {model.name}
                           </option>
                         ))}
@@ -312,62 +290,110 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
             title="Models"
             defaultOpen
           >
-            {isModelsLoading ? (
+            {isModelsLoading || isInstalledModelsLoading ? (
               <div css={emptyStateStyle}>Loading models...</div>
             ) : modelsError ? (
               <div css={emptyStateStyle}>Error: {modelsError}</div>
             ) : (
-              <div css={modelsListStyle}>
-                {availableModels.length === 0 ? (
-                  <div css={emptyStateStyle}>No models available</div>
-                ) : (
-                  availableModels.map((model) => (
-                    <div
-                      key={model.name}
-                      css={modelCardStyle}
-                    >
-                      <div css={modelHeaderStyle}>
-                        <div>
-                          <div css={modelNameStyle}>{model.name}</div>
-                          <div css={modelSizeStyle}>{model.description}</div>
+              <>
+                {/* Installed Models Section */}
+                <Accordion
+                  title={`Installed Models (${installedModels.length})`}
+                  defaultOpen
+                >
+                  <div css={modelsListStyle}>
+                    {installedModels.length === 0 ? (
+                      <div css={emptyStateStyle}>No models installed</div>
+                    ) : (
+                      installedModels.map((model) => (
+                        <div
+                          key={model.name}
+                          css={modelCardStyle}
+                        >
+                          <div css={modelHeaderStyle}>
+                            <div>
+                              <div css={modelNameStyle}>{model.name}</div>
+                              <div css={modelSizeStyle}>
+                                {model.description}
+                              </div>
+                              {model.recommended && (
+                                <div css={statusDownloadedStyle}>
+                                  Recommended
+                                </div>
+                              )}
+                            </div>
+                            <div css={modelActionsStyle}>
+                              <span css={statusDownloadedStyle}>Installed</span>
+                              <Button
+                                onClick={() => removeModelHandler(model.name)}
+                                disabled={removingModels.has(model.name)}
+                              >
+                                {removingModels.has(model.name)
+                                  ? "Removing..."
+                                  : "Uninstall"}
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        <div css={modelActionsStyle}>
-                          {model.installed ? (
-                            <span css={statusDownloadedStyle}>Installed</span>
-                          ) : downloadingModels.has(model.name) ? (
-                            <span css={statusDownloadingStyle}>
-                              Downloading...
-                            </span>
-                          ) : (
-                            <span css={statusNotDownloadedStyle}>
-                              Not Installed
-                            </span>
-                          )}
-                          {model.installed ? (
-                            <Button
-                              onClick={() => removeModelHandler(model.name)}
-                              disabled={removingModels.has(model.name)}
-                            >
-                              {removingModels.has(model.name)
-                                ? "Removing..."
-                                : "Remove"}
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => downloadModelHandler(model.name)}
-                              disabled={downloadingModels.has(model.name)}
-                            >
-                              {downloadingModels.has(model.name)
-                                ? "Downloading..."
-                                : "Download"}
-                            </Button>
-                          )}
-                        </div>
+                      ))
+                    )}
+                  </div>
+                </Accordion>
+
+                {/* Available Models Section */}
+                <Accordion
+                  title={`Available Models (${
+                    availableModels.filter((m) => !m.installed).length
+                  })`}
+                >
+                  <div css={modelsListStyle}>
+                    {availableModels.filter((m) => !m.installed).length ===
+                    0 ? (
+                      <div css={emptyStateStyle}>
+                        No additional models available
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ) : (
+                      availableModels
+                        .filter((m) => !m.installed)
+                        .map((model) => (
+                          <div
+                            key={model.name}
+                            css={modelCardStyle}
+                          >
+                            <div css={modelHeaderStyle}>
+                              <div>
+                                <div css={modelNameStyle}>{model.name}</div>
+                                <div css={modelSizeStyle}>
+                                  {model.description}
+                                </div>
+                                {model.recommended && (
+                                  <div css={statusDownloadedStyle}>
+                                    Recommended
+                                  </div>
+                                )}
+                              </div>
+                              <div css={modelActionsStyle}>
+                                <span css={statusNotDownloadedStyle}>
+                                  Not Installed
+                                </span>
+                                <Button
+                                  onClick={() =>
+                                    downloadModelHandler(model.name)
+                                  }
+                                  disabled={downloadingModels.has(model.name)}
+                                >
+                                  {downloadingModels.has(model.name)
+                                    ? "Downloading..."
+                                    : "Download"}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </Accordion>
+              </>
             )}
           </Accordion>
 

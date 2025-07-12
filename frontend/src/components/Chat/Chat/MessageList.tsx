@@ -17,6 +17,7 @@ import {
   enterButtonStyle,
   stoppingSpinnerStyle,
   progressContainerStyle,
+  progressBubbleStyle,
 } from "./MessageListStyles.ts";
 import { AnimatedProgressText } from "../DocumentAnalysis/DocAnalysisProgress.tsx";
 import { FileList } from "../DocumentAnalysis/FileList.tsx";
@@ -26,6 +27,7 @@ import SourcePills from "../../UI/SourcePills.tsx";
 import { useScrollManagement } from "../../../hooks/useScrollManagement.ts";
 import type { Message, FileInfo, WebSearchSource } from "../models.ts";
 import LoadingSpinner from "../../UI/LoadingSpinner.tsx";
+import { useUIStore } from "../../../store/index.ts";
 
 interface MessageListProps {
   messages: Message[];
@@ -34,11 +36,6 @@ interface MessageListProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
-  isStreaming?: boolean;
-  progress?: number | null;
-  progressText?: string | null;
-  isStopping?: boolean;
-  pdfChoiceId?: string | null;
   webSearchStatus: {
     isSearching: boolean;
     searchTerms?: string;
@@ -100,7 +97,7 @@ const ProgressOrThinkingUI = ({
 }) => (
   <div css={thinkingStyle}>
     {progress !== null ? (
-      <div>
+      <div css={progressContainerStyle}>
         <div>Document Analysis in Progress...</div>
         <div css={progressBarContainerStyle}>
           <div
@@ -302,15 +299,19 @@ function MessageListComponent({
   onAppendToInput,
   isPrivate = false,
   handlePdfChoice,
-  isStreaming = false,
-  progress = null,
-  progressText = null,
-  isStopping = false,
-  pdfChoiceId = null,
   webSearchStatus,
   onStopAnalysis,
   memoryNotification,
 }: MessageListProps) {
+  // Get streaming and progress state from UI store
+  const { isStreaming, progress, progressText, isStopping, pdfChoiceId } =
+    useUIStore();
+  console.log(
+    "[MessageListComponent] messages:",
+    messages,
+    "isThinking:",
+    isThinking
+  );
   const handleStopAnalysis = () => {
     onStopAnalysis?.();
   };
@@ -384,11 +385,55 @@ function MessageListComponent({
               const isLastMessage = index === validMessages.length - 1;
               const isAssistantMessage = msg.user_id === "assistant";
               const isEmptyMessage = msg.message === "";
-              const isPdfChoiceMessage = msg.type === "pdf_choice";
+
+              // Check for PDF choice message with fallback
+              const isPdfChoiceMessage =
+                msg.type === "pdf_choice" ||
+                (msg.id?.startsWith("pdf-choice-") &&
+                  msg.user_id === "assistant" &&
+                  (msg.message.includes("scanned document") ||
+                    msg.message.includes("Would you like to extract text") ||
+                    msg.message.includes("analyze it as an image")));
+
+              // Debug log for each message
+              console.log("Rendering message", {
+                index,
+                id: msg.id,
+                user_id: msg.user_id,
+                type: msg.type,
+                message:
+                  msg.message.substring(0, 100) +
+                  (msg.message.length > 100 ? "..." : ""),
+                isLastMessage,
+                isAssistantMessage,
+                isEmptyMessage,
+                isPdfChoiceMessage,
+              });
+
+              // Special debugging for potential PDF choice messages
+              if (msg.id?.startsWith("pdf-choice-") || isPdfChoiceMessage) {
+                console.log("🔍 PDF Choice Message Debug:", {
+                  id: msg.id,
+                  type: msg.type,
+                  typeCheck: msg.type === "pdf_choice",
+                  idCheck: msg.id?.startsWith("pdf-choice-"),
+                  messageCheck: msg.message.includes("scanned document"),
+                  isPdfChoiceMessage,
+                  messageStart: msg.message.substring(0, 50),
+                  hasHandlePdfChoice: !!handlePdfChoice,
+                  pdfChoiceId,
+                  isAnalysisInProgress:
+                    progress !== null && pdfChoiceId === msg.id,
+                });
+              }
 
               // Unified state calculations
+              // Show thinking bubble if isThinking is true, last message is empty assistant message
               const shouldShowThinking =
-                isEmptyMessage && isThinking && isLastMessage;
+                isThinking &&
+                isLastMessage &&
+                isAssistantMessage &&
+                isEmptyMessage;
               const shouldShowSearching =
                 webSearchStatus.isSearching && isThinking && isLastMessage;
               const shouldShowStreaming =
@@ -420,87 +465,88 @@ function MessageListComponent({
                 ? userMessageStyle
                 : assistantMessageStyle;
 
-              const bubbleStyle = messageBubbleStyle(msg.user_id === "user");
-
               // Check if we should show progress/thinking states
               const shouldShowProgressOrThinking =
                 shouldShowThinking ||
                 shouldShowSearching ||
                 isAnalysisInProgress;
 
+              // Use special wider bubble style for progress/thinking states
+              const bubbleStyle = shouldShowProgressOrThinking
+                ? progressBubbleStyle
+                : messageBubbleStyle(msg.user_id === "user");
+
               return (
-                msg.message && (
-                  <div
-                    key={msg.id || index}
-                    css={messageStyle}
-                  >
-                    <div css={bubbleStyle}>
-                      {shouldShowProgressOrThinking ? (
-                        <ProgressOrThinkingUI
-                          progress={progress}
-                          progressText={progressText}
-                          isStopping={isStopping}
-                          onStopAnalysis={handleStopAnalysis}
-                          webSearchStatus={webSearchStatus}
-                        />
-                      ) : typeof msg.message === "string" ? (
-                        <div>
-                          {/* PDF Choice Message Content */}
-                          {isPdfChoiceMessage && !isAnalysisInProgress && (
+                <div
+                  key={msg.id || index}
+                  css={messageStyle}
+                >
+                  <div css={bubbleStyle}>
+                    {shouldShowProgressOrThinking ? (
+                      <ProgressOrThinkingUI
+                        progress={progress}
+                        progressText={progressText}
+                        isStopping={isStopping}
+                        onStopAnalysis={handleStopAnalysis}
+                        webSearchStatus={webSearchStatus}
+                      />
+                    ) : typeof msg.message === "string" ? (
+                      <div>
+                        {/* PDF Choice Message Content */}
+                        {isPdfChoiceMessage && !isAnalysisInProgress && (
+                          <>
+                            <div style={{ marginBottom: 12 }}>
+                              <strong>Scanned PDF Detected</strong>
+                            </div>
+                            <div style={{ marginBottom: 16 }}>
+                              {msg.message}
+                            </div>
+                            {!shouldHideButtons && (
+                              <PdfChoiceButtons
+                                msgId={msg.id}
+                                handlePdfChoice={handlePdfChoice}
+                              />
+                            )}
+                          </>
+                        )}
+
+                        {/* Regular Message Content */}
+                        {!isPdfChoiceMessage && (
+                          <RegularMessageContent
+                            message={msg.message}
+                            files={msg.files}
+                            web_search_sources={msg.web_search_sources}
+                            shouldShowStreaming={shouldShowStreaming}
+                            shouldShowProgress={shouldShowProgress}
+                            progress={progress}
+                            progressText={progressText}
+                            isStopping={isStopping}
+                            onStopAnalysis={handleStopAnalysis}
+                            user_id={msg.user_id}
+                            onAppendToInput={onAppendToInput}
+                          />
+                        )}
+
+                        {/* Show analysis result for PDF choice messages */}
+                        {isPdfChoiceMessage &&
+                          (isAnalysisComplete || isAnalysisInProgress) && (
                             <>
-                              <div style={{ marginBottom: 12 }}>
-                                <strong>Scanned PDF Detected</strong>
-                              </div>
-                              <div style={{ marginBottom: 16 }}>
-                                {msg.message}
-                              </div>
-                              {!shouldHideButtons && (
-                                <PdfChoiceButtons
-                                  msgId={msg.id}
-                                  handlePdfChoice={handlePdfChoice}
-                                />
-                              )}
+                              {formatMessage(msg.message)}
+                              {msg.files && <FileList files={msg.files} />}
+                              {msg.web_search_sources &&
+                                msg.web_search_sources.length > 0 && (
+                                  <SourcePills
+                                    sources={msg.web_search_sources}
+                                  />
+                                )}
                             </>
                           )}
-
-                          {/* Regular Message Content */}
-                          {!isPdfChoiceMessage && (
-                            <RegularMessageContent
-                              message={msg.message}
-                              files={msg.files}
-                              web_search_sources={msg.web_search_sources}
-                              shouldShowStreaming={shouldShowStreaming}
-                              shouldShowProgress={shouldShowProgress}
-                              progress={progress}
-                              progressText={progressText}
-                              isStopping={isStopping}
-                              onStopAnalysis={handleStopAnalysis}
-                              user_id={msg.user_id}
-                              onAppendToInput={onAppendToInput}
-                            />
-                          )}
-
-                          {/* Show analysis result for PDF choice messages */}
-                          {isPdfChoiceMessage &&
-                            (isAnalysisComplete || isAnalysisInProgress) && (
-                              <>
-                                {formatMessage(msg.message)}
-                                {msg.files && <FileList files={msg.files} />}
-                                {msg.web_search_sources &&
-                                  msg.web_search_sources.length > 0 && (
-                                    <SourcePills
-                                      sources={msg.web_search_sources}
-                                    />
-                                  )}
-                              </>
-                            )}
-                        </div>
-                      ) : (
-                        "[Invalid message object]"
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      "[Invalid message object]"
+                    )}
                   </div>
-                )
+                </div>
               );
             })}
           </>

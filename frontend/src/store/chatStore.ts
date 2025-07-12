@@ -65,6 +65,7 @@ interface ChatState {
       | Partial<Message>
       | ((prevMsg: Message | undefined) => Partial<Message>)
   ) => void;
+
   clearMessages: () => void;
   handleSendMessage: (
     message: string,
@@ -218,12 +219,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       | Partial<Message>
       | ((prevMsg: Message | undefined) => Partial<Message>)
   ) => {
-    set((state) => ({
-      messages: state.messages.map((msg) => {
+    set((state: { messages: Message[] }) => ({
+      messages: state.messages.map((msg: Message) => {
         if (msg.id === messageId) {
           const updateObj =
             typeof updates === "function" ? updates(msg) : updates;
-          return { ...msg, ...updateObj } as Message;
+          const updatedMsg = { ...msg, ...updateObj } as Message;
+          console.log("[updateMessage] Updating message:", updatedMsg);
+          return updatedMsg;
         }
         return msg;
       }),
@@ -288,7 +291,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     addMessage(userMessage);
 
-    // Create assistant message placeholder
+    // Create assistant message placeholder and set id BEFORE calling sendMessageWebSocket
     const assistantMessageId = `assistant-${Date.now()}-${Math.random()}`;
     set({ currentAssistantMessageId: assistantMessageId });
 
@@ -303,6 +306,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     addMessage(assistantMessage);
 
+    // Wait for the state to update before calling sendMessageWebSocket
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     try {
       await sendMessageWebSocket(
         message,
@@ -311,11 +317,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
         isPrivate,
         attachments,
         (chunk: string, done: boolean, error?: string, progress?: number) => {
+          console.log(
+            "[CHUNK HANDLER] chunk:",
+            chunk,
+            "done:",
+            done,
+            "error:",
+            error,
+            "progress:",
+            progress,
+            "currentAssistantMessageId:",
+            get().currentAssistantMessageId
+          );
+          const { currentAssistantMessageId } = get();
           if (error) {
-            // Update the assistant message with error
-            updateMessage(assistantMessageId, {
-              message: `Error: ${error}`,
-            });
+            if (currentAssistantMessageId) {
+              updateMessage(currentAssistantMessageId, {
+                message: `Error: ${error}`,
+              });
+            }
 
             // Stop streaming indicator
             window.dispatchEvent(
@@ -386,15 +406,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
               if (chunk && chunk.trim() && !isStatusUpdate) {
                 // This is actual analysis content, not a status update
-                updateMessage(assistantMessageId, (prevMsg) => ({
-                  message: (prevMsg?.message || "") + chunk,
-                }));
+                if (currentAssistantMessageId) {
+                  const state = get();
+                  const found = state.messages.find(
+                    (m) => m.id === currentAssistantMessageId
+                  );
+                  console.log("[UPDATE] Found assistant message:", found);
+                  updateMessage(currentAssistantMessageId, (prevMsg) => ({
+                    message: (prevMsg?.message || "") + chunk,
+                  }));
+                  // Set isMessageLoading to false as soon as we get the first chunk
+                  set({ isMessageLoading: false });
+                }
               }
             } else {
               // Regular streaming without progress - update with new chunk
-              updateMessage(assistantMessageId, (prevMsg) => ({
-                message: (prevMsg?.message || "") + chunk,
-              }));
+              if (chunk && chunk.trim()) {
+                if (currentAssistantMessageId) {
+                  updateMessage(currentAssistantMessageId, (prevMsg) => ({
+                    message: (prevMsg?.message || "") + chunk,
+                  }));
+                  set({ isMessageLoading: false });
+                }
+              }
 
               // Dispatch streaming progress event for regular message streaming
               window.dispatchEvent(

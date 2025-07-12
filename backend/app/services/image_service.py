@@ -59,12 +59,14 @@ class ImageModelRegistry:
     def get_default_vision_model(cls) -> str:
         """Get default vision model from settings"""
         from app.config.settings import settings
-        return settings.VISION_DEFAULT_MODEL
+
+        return settings.VISION_MODEL
 
     @classmethod
     def get_fallback_models(cls) -> List[str]:
         """Get fallback models from settings"""
         from app.config.settings import settings
+
         return settings.VISION_FALLBACK_MODELS
 
     @classmethod

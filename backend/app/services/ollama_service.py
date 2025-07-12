@@ -19,7 +19,7 @@ class OllamaService:
         if model is None:
             model = settings.OLLAMA_MODEL
         print(
-            f"[OllamaService] Sending request: model={model}, timeout={timeout}, prompt_len={len(prompt)}"
+            f"[OllamaService] Sending request: model={model}, timeout={timeout}, prompt={prompt[:100]}..."
         )
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -166,9 +166,15 @@ class OllamaService:
     async def remove_model(self, model_name: str) -> Dict[str, str]:
         """Remove a model from Ollama"""
         try:
+            import json
+
             async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.delete(
-                    f"{self.base_url}/api/delete", params={"name": model_name}
+                # Ollama expects DELETE with JSON body
+                response = await client.request(
+                    "DELETE",
+                    f"{self.base_url}/api/delete",
+                    content=json.dumps({"name": model_name}),
+                    headers={"Content-Type": "application/json"},
                 )
                 response.raise_for_status()
                 return {

@@ -16,6 +16,7 @@ import {
   stoppingSpinnerStyle,
   progressContainerStyle,
   enterButtonStyle,
+  progressBubbleStyle,
 } from "./MessageListStyles";
 import { AnimatedProgressText } from "../DocumentAnalysis/DocAnalysisProgress";
 import { FileList } from "../DocumentAnalysis/FileList";
@@ -91,17 +92,26 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     [onAppendToInput]
   );
 
+  // Use special wider bubble style for progress/thinking states
+  const shouldShowProgressOrThinking =
+    messageState.shouldShowThinking ||
+    messageState.shouldShowSearching ||
+    messageState.shouldShowProgress;
+  const bubbleStyle = shouldShowProgressOrThinking
+    ? progressBubbleStyle
+    : messageBubbleStyle(message.user_id === "user");
+
   return (
     <div
       css={
         message.user_id === "user" ? userMessageStyle : assistantMessageStyle
       }
     >
-      <div css={messageBubbleStyle(message.user_id === "user")}>
+      <div css={bubbleStyle}>
         {messageState.shouldShowThinking || messageState.shouldShowSearching ? (
           <div css={thinkingStyle}>
             {progress !== null ? (
-              <div>
+              <div css={progressContainerStyle}>
                 <div>Document Analysis in Progress...</div>
                 <div css={progressBarContainerStyle}>
                   <div

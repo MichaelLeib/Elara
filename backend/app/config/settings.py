@@ -15,10 +15,15 @@ class Settings:
         self._fast_model: str = "phi3:mini"
         self._summary_model: str = "phi3:mini"
         self._user_info_extraction_model: str = "tinyllama:1.1b"
-        self._web_search_decision_model: str = "phi3:mini"
+        self._decision_model: str = "phi3:mini"
         self._document_analysis_model: str = "phi3:mini"
+        self._document_creation_model: str = "dolphin-mistral:7b"
         self._vision_default_model: str = "llava:7b"
-        self._vision_fallback_models: List[str] = ["phi3:mini", "llama3:latest", "dolphin-mistral:7b"]
+        self._vision_fallback_models: List[str] = [
+            "phi3:mini",
+            "llama3:latest",
+            "dolphin-mistral:7b",
+        ]
         self._timeout: float = 30.0
         self._message_limit: int = 5
         self._message_offset: int = 0
@@ -35,23 +40,38 @@ class Settings:
         try:
             with open("storage/settings.json", "r") as f:
                 settings = json.load(f)
-            
+
             # Load model settings
             model_settings = settings.get("model", {})
             self._ollama_url = model_settings.get("OLLAMA_URL", self._ollama_url)
             self._ollama_model = model_settings.get("OLLAMA_MODEL", self._ollama_model)
             self._chat_model = model_settings.get("CHAT_MODEL", self._chat_model)
             self._fast_model = model_settings.get("FAST_MODEL", self._fast_model)
-            self._summary_model = model_settings.get("SUMMARY_MODEL", self._summary_model)
-            self._user_info_extraction_model = model_settings.get("USER_INFO_EXTRACTION_MODEL", self._user_info_extraction_model)
-            self._web_search_decision_model = model_settings.get("WEB_SEARCH_DECISION_MODEL", self._web_search_decision_model)
-            self._document_analysis_model = model_settings.get("DOCUMENT_ANALYSIS_MODEL", self._document_analysis_model)
-            
+            self._summary_model = model_settings.get(
+                "SUMMARY_MODEL", self._summary_model
+            )
+            self._user_info_extraction_model = model_settings.get(
+                "USER_INFO_EXTRACTION_MODEL", self._user_info_extraction_model
+            )
+            self._decision_model = model_settings.get(
+                "DECISION_MODEL", self._decision_model
+            )
+            self._document_analysis_model = model_settings.get(
+                "DOCUMENT_ANALYSIS_MODEL", self._document_analysis_model
+            )
+            self._document_creation_model = model_settings.get(
+                "DOCUMENT_CREATION_MODEL", self._document_creation_model
+            )
+
             # Load vision settings
             vision_settings = settings.get("vision", {})
-            self._vision_default_model = vision_settings.get("DEFAULT_MODEL", self._vision_default_model)
-            self._vision_fallback_models = vision_settings.get("FALLBACK_MODELS", self._vision_fallback_models)
-            
+            self._vision_default_model = vision_settings.get(
+                "DEFAULT_MODEL", self._vision_default_model
+            )
+            self._vision_fallback_models = vision_settings.get(
+                "FALLBACK_MODELS", self._vision_fallback_models
+            )
+
             # Load other settings
             document_settings = settings.get("document", {})
             self._chunk_size = document_settings.get("CHUNK_SIZE")
@@ -103,15 +123,19 @@ class Settings:
         return self._user_info_extraction_model
 
     @property
-    def WEB_SEARCH_DECISION_MODEL(self) -> str:
-        return self._web_search_decision_model
+    def DECISION_MODEL(self) -> str:
+        return self._decision_model
 
     @property
     def DOCUMENT_ANALYSIS_MODEL(self) -> str:
         return self._document_analysis_model
 
     @property
-    def VISION_DEFAULT_MODEL(self) -> str:
+    def DOCUMENT_CREATION_MODEL(self) -> str:
+        return self._document_creation_model
+
+    @property
+    def VISION_MODEL(self) -> str:
         return self._vision_default_model
 
     @property
@@ -170,7 +194,7 @@ class Settings:
         fast_model: Optional[str] = None,
         summary_model: Optional[str] = None,
         user_info_extraction_model: Optional[str] = None,
-        web_search_decision_model: Optional[str] = None,
+        decision_model: Optional[str] = None,
         document_analysis_model: Optional[str] = None,
         vision_default_model: Optional[str] = None,
         vision_fallback_models: Optional[List[str]] = None,
@@ -193,8 +217,8 @@ class Settings:
             self._summary_model = summary_model
         if user_info_extraction_model:
             self._user_info_extraction_model = user_info_extraction_model
-        if web_search_decision_model:
-            self._web_search_decision_model = web_search_decision_model
+        if decision_model:
+            self._decision_model = decision_model
         if document_analysis_model:
             self._document_analysis_model = document_analysis_model
         if vision_default_model:
@@ -222,7 +246,7 @@ class Settings:
                     "FAST_MODEL": self._fast_model,
                     "SUMMARY_MODEL": self._summary_model,
                     "USER_INFO_EXTRACTION_MODEL": self._user_info_extraction_model,
-                    "WEB_SEARCH_DECISION_MODEL": self._web_search_decision_model,
+                    "DECISION_MODEL": self._decision_model,
                     "DOCUMENT_ANALYSIS_MODEL": self._document_analysis_model,
                 },
                 "vision": {

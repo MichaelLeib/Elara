@@ -322,6 +322,50 @@ export const assistantMessageStyle = css`
 
 export const thinkingStyle = css`
   ${assistantMessageStyle}
+  position: relative;
+  max-width: 90%; /* Allow thinking bubbles to be wider than regular messages */
+`;
+
+// Special bubble style for progress/thinking states - wider than regular messages
+export const progressBubbleStyle = css`
+  max-width: 100%;
+  padding: 1rem 1.25rem;
+  border-radius: 1.25rem;
+  font-size: 0.95rem;
+  text-align: start;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+  position: relative;
+  margin-bottom: 1rem;
+  width: 95%; /* Slightly wider than regular messages but within bounds */
+
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #1f2937;
+  border-bottom-left-radius: 0.25rem;
+  border: 1px solid lightgray;
+  box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.15);
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+    border-color: #cbd5e1;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #f1f5f9;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+
+    &:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+  }
 `;
 
 export const streamingStyle = css`
@@ -493,10 +537,17 @@ export const stoppingSpinnerStyle = css`
 
 export const progressContainerStyle = css`
   margin-top: 1rem;
-  padding: 0.75rem;
+  padding: 1rem 3rem 1rem 1rem; /* Extra right padding for stop button */
   background: rgba(59, 130, 246, 0.1);
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   border: 1px solid rgba(59, 130, 246, 0.2);
   position: relative;
   overflow: hidden;
+  width: 95%; /* Simple fixed width that stays within bounds */
+  box-sizing: border-box;
+
+  @media (prefers-color-scheme: dark) {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
 `;

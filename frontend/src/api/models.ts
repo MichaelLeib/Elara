@@ -79,7 +79,7 @@ export interface Settings {
   FAST_MODEL: string;
   SUMMARY_MODEL: string;
   USER_INFO_EXTRACTION_MODEL: string;
-  WEB_SEARCH_DECISION_MODEL: string;
+  DECISION_MODEL: string;
   DOCUMENT_ANALYSIS_MODEL: string;
   VISION_DEFAULT_MODEL: string;
   VISION_FALLBACK_MODELS: string[];

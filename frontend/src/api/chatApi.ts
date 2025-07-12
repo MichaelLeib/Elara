@@ -215,17 +215,46 @@ class WebSocketManager {
           });
           break;
 
-        case "done":
+        case "done": {
           this.dispatchEvent("message-chunk", { content: "", done: true });
-          break;
 
-        case "error":
+          // If we have an active PDF choice, also dispatch analysis-complete to reset loading state
+          const pdfChoiceId = this.getPdfChoiceMessageId();
+          if (pdfChoiceId) {
+            console.log(
+              "🔄 [WEBSOCKET] PDF analysis done, dispatching analysis-complete"
+            );
+            this.dispatchEvent("analysis-complete", {
+              content: "",
+              type: "done",
+            });
+            this.clearPdfChoiceMessageId();
+          }
+          break;
+        }
+
+        case "error": {
           this.dispatchEvent("message-chunk", {
             content: "",
             done: true,
             error: data.content,
           });
+
+          // If we have an active PDF choice, also dispatch analysis-complete to reset loading state
+          const pdfChoiceId = this.getPdfChoiceMessageId();
+          if (pdfChoiceId) {
+            console.log(
+              "🔄 [WEBSOCKET] PDF analysis error, dispatching analysis-complete"
+            );
+            this.dispatchEvent("analysis-complete", {
+              content: "",
+              type: "error",
+              error: data.content,
+            });
+            this.clearPdfChoiceMessageId();
+          }
           break;
+        }
 
         case "document_analysis":
           this.handleDocumentAnalysis(data);
@@ -486,9 +515,31 @@ class WebSocketManager {
       });
     }
 
-    // Also dispatch as window event for backward compatibility
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent(event, { detail }));
+    // Only dispatch certain events as window events to avoid duplication
+    // For message-chunk events, only dispatch as window events if no internal listeners exist
+    const windowEventWhitelist = [
+      "analysis-complete",
+      "websocket-closed",
+      "ocr-result",
+      "vision-result",
+      "web-search-performed",
+      "memory-updated",
+      "image-based-pdf-choice",
+      "document-analysis-progress",
+      "message-streaming",
+      "message-chunk", // Added back to support fallback cases
+    ];
+
+    if (typeof window !== "undefined" && windowEventWhitelist.includes(event)) {
+      // For message-chunk events, only dispatch as window event if no internal listeners
+      if (event === "message-chunk") {
+        const hasInternalListeners = listeners && listeners.size > 0;
+        if (!hasInternalListeners) {
+          window.dispatchEvent(new CustomEvent(event, { detail }));
+        }
+      } else {
+        window.dispatchEvent(new CustomEvent(event, { detail }));
+      }
     }
   }
 
@@ -570,6 +621,9 @@ export async function sendMessageWebSocket(
       chunkDetail.progress,
       chunkDetail.clear
     );
+    if (chunkDetail.done) {
+      wsManager.removeEventListener("message-chunk", messageChunkHandler);
+    }
   };
 
   wsManager.addEventListener("message-chunk", messageChunkHandler);
@@ -607,9 +661,9 @@ export async function sendMessageWebSocket(
       ...payload,
       files: payload.files ? `${payload.files.length} files` : undefined,
     });
-  } finally {
-    // Clean up event listener
-    wsManager.removeEventListener("message-chunk", messageChunkHandler);
+  } catch (error) {
+    console.error("Error sending message to WebSocket:", error);
+    throw error;
   }
 }
 
@@ -747,7 +801,9 @@ export async function downloadModel(
 export async function removeModel(
   modelName: string
 ): Promise<RemoveModelResponse> {
-  const res = await fetch(config.API_URL + `/models/${modelName}`, {
+  // URL encode the model name to handle special characters like colons
+  const encodedModelName = encodeURIComponent(modelName);
+  const res = await fetch(config.API_URL + `/models/${encodedModelName}`, {
     method: "DELETE",
   });
 
@@ -761,8 +817,10 @@ export async function removeModel(
 export async function getDownloadStatus(
   modelName: string
 ): Promise<DownloadStatusResponse> {
+  // URL encode the model name to handle special characters like colons
+  const encodedModelName = encodeURIComponent(modelName);
   const res = await fetch(
-    config.API_URL + `/models/download-status/${modelName}`
+    config.API_URL + `/models/download-status/${encodedModelName}`
   );
   if (!res.ok) {
     throw new Error(`HTTP error! status: ${res.status}`);

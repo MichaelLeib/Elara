@@ -6,30 +6,25 @@
     "FAST_MODEL": "phi3:mini",
     "SUMMARY_MODEL": "phi3:mini",
     "USER_INFO_EXTRACTION_MODEL": "tinyllama:1.1b",
-    "WEB_SEARCH_DECISION_MODEL": "phi3:mini",
-    "DOCUMENT_ANALYSIS_MODEL": "phi3:mini"
+    "DECISION_MODEL": "phi3:mini",
+    "DOCUMENT_ANALYSIS_MODEL": "phi3:mini",
+    "DOCUMENT_CREATION_MODEL": "dolphin-mistral:7b",
+    "VISION_MODEL": "llava:7b"
   },
   "vision": {
     "DEFAULT_MODEL": "llava:7b",
     "FALLBACK_MODELS": ["phi3:mini", "llama3:latest", "dolphin-mistral:7b"]
   },
-  "timeout": 300,
-  "document": {
-    "TIMEOUT": 600
+  "web_search": {
+    "ENABLED": true,
+    "ENGINE": "duckduckgo",
+    "SEARCH_PROVIDER": "duckduckgo_html"
   },
-  "image": {
-    "IMAGE_TIMEOUT": 300
-  },
+  "timeout": 30.0,
   "chat": {
     "MESSAGE_LIMIT": 5,
     "MESSAGE_OFFSET": 0
   },
   "manual_model_switch": true,
-  "summarization_prompt": "Analyze this conversation and provide insights:\n\nUser: {user_message}\nAssistant: {assistant_message}\n\nFocus on:\n- Technical issues mentioned\n- Solutions provided\n- Next steps for the user\n\nReturn as JSON with: key_insights, action_items, context_notes, conversation_summary, confidence_level, topics",
-  "web_search": {
-    "ENABLED": true,
-    "ENGINE": "duckduckgo",
-    "SEARCH_PROVIDER": "duckduckgo_html",
-    "SERPER_API_KEY": "71ada0a6af8ba42b849d51d6f10a257b16c706dc"
-  }
+  "summarization_prompt": "Analyze this conversation and provide insights:\n\nUser: {user_message}\nAssistant: {assistant_message}\n\nFocus on:\n- Technical issues mentioned\n- Solutions provided\n- Next steps for the user\n\nReturn as JSON with: key_insights, action_items, context_notes, conversation_summary, confidence_level, topics"
 }

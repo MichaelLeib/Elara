@@ -114,9 +114,12 @@ export const useSettingsDialogStore = create<SettingsDialogState>(
         }));
         await downloadModel(modelName);
 
-        // Refresh models list
+        // Refresh both available and installed models lists
         const updatedModelsResponse = await getAvailableModels();
-        set({ availableModels: updatedModelsResponse.available_models });
+        set({
+          availableModels: updatedModelsResponse.available_models,
+          installedModels: updatedModelsResponse.installed_models || [],
+        });
       } catch (error) {
         console.error("Error downloading model:", error);
         set({ modelsError: `Failed to download ${modelName}` });
@@ -136,9 +139,12 @@ export const useSettingsDialogStore = create<SettingsDialogState>(
         }));
         await removeModel(modelName);
 
-        // Refresh models list
+        // Refresh both available and installed models lists
         const updatedModelsResponse = await getAvailableModels();
-        set({ availableModels: updatedModelsResponse.available_models });
+        set({
+          availableModels: updatedModelsResponse.available_models,
+          installedModels: updatedModelsResponse.installed_models || [],
+        });
       } catch (error) {
         console.error("Error removing model:", error);
         set({ modelsError: `Failed to remove ${modelName}` });

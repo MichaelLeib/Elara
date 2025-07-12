@@ -1,6 +1,7 @@
 # Model Configuration Feature Implementation
 
 ## Overview
+
 Added a new "Model Configuration" section to the Settings Dialog that allows users to configure which Ollama models are used for different purposes within the application.
 
 ## Features Implemented
@@ -8,20 +9,23 @@ Added a new "Model Configuration" section to the Settings Dialog that allows use
 ### Frontend Changes
 
 1. **Updated Settings Interface** (`frontend/src/store/settingsStore.ts` & `frontend/src/api/models.ts`)
+
    - Added all model configuration fields:
      - `CHAT_MODEL` - Main model for general conversation
      - `FAST_MODEL` - Lightweight model for quick responses
      - `SUMMARY_MODEL` - Model for text summarization
      - `USER_INFO_EXTRACTION_MODEL` - Model for extracting user information
-     - `WEB_SEARCH_DECISION_MODEL` - Model for web search decisions
+     - `DECISION_MODEL` - Model for decisions to do web search, image creation/analysis, document creation/analysis etc...
      - `DOCUMENT_ANALYSIS_MODEL` - Model for document analysis
      - `VISION_DEFAULT_MODEL` - Model for image analysis
      - `VISION_FALLBACK_MODELS` - Array of fallback vision models
 
 2. **New API Function** (`frontend/src/api/chatApi.ts`)
+
    - Added `getInstalledModels()` function to retrieve only installed Ollama models
 
 3. **Enhanced Settings Dialog Store** (`frontend/src/store/settingsDialogStore.ts`)
+
    - Added `installedModels` state to track installed models
    - Added `loadInstalledModels()` function
    - Integrated installed models loading into the main `loadData()` function
@@ -66,7 +70,7 @@ The model configurations are saved in `settings.json` under the following struct
     "FAST_MODEL": "selected_model_name",
     "SUMMARY_MODEL": "selected_model_name",
     "USER_INFO_EXTRACTION_MODEL": "selected_model_name",
-    "WEB_SEARCH_DECISION_MODEL": "selected_model_name",
+    "DECISION_MODEL": "selected_model_name",
     "DOCUMENT_ANALYSIS_MODEL": "selected_model_name"
   },
   "vision": {

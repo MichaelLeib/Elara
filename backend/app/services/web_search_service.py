@@ -121,6 +121,10 @@ class WebSearchService:
 
         self.max_results = 5
         self.search_timeout = 10.0
+        self.content_timeout = 15.0
+        self.max_content_length = (
+            5000  # Limit content length to avoid overwhelming the model
+        )
 
     async def should_perform_web_search(
         self, message: str, context: str = ""
@@ -136,8 +140,12 @@ class WebSearchService:
             Dict containing decision and reasoning
         """
         try:
+            print(f"[WebSearchService] Analyzing message: '{message}'")
+            print(f"[WebSearchService] Context: '{context}'")
+
             # Combine message and context for analysis
             full_text = f"{message} {context}".lower()
+            print(f"[WebSearchService] Full text for analysis: '{full_text}'")
 
             # Check for explicit web search requests
             explicit_indicators = [
@@ -165,14 +173,19 @@ class WebSearchService:
                     }
 
             # Check for current information patterns
+            print(
+                f"[WebSearchService] Checking {len(self.current_info_patterns)} patterns"
+            )
             for pattern in self.current_info_patterns:
                 if re.search(pattern, full_text, re.IGNORECASE):
-                    return {
+                    result = {
                         "should_search": True,
                         "confidence": "high",
                         "reason": f"Current information pattern detected: '{pattern}'",
                         "search_terms": self._extract_search_terms(message),
                     }
+                    print(f"[WebSearchService] Pattern match found: {result}")
+                    return result
 
             # Check for web search keywords
             found_keywords = []
@@ -180,16 +193,23 @@ class WebSearchService:
                 if keyword in full_text:
                     found_keywords.append(keyword)
 
+            print(f"[WebSearchService] Found keywords: {found_keywords}")
+
             if found_keywords:
-                return {
+                result = {
                     "should_search": True,
                     "confidence": "medium",
                     "reason": f"Web search keywords detected: {', '.join(found_keywords)}",
                     "search_terms": self._extract_search_terms(message),
                 }
+                print(f"[WebSearchService] Keyword-based decision: {result}")
+                return result
 
             # Use AI to make a final decision for ambiguous cases
-            return await self._ai_decision_helper(message, context)
+            print("[WebSearchService] No keywords found, using AI decision helper")
+            ai_result = await self._ai_decision_helper(message, context)
+            print(f"[WebSearchService] AI decision result: {ai_result}")
+            return ai_result
 
         except Exception as e:
             print(f"Error in should_perform_web_search: {e}")
@@ -310,7 +330,7 @@ If should_search is true, provide 3-5 relevant search terms."""
             response = await ollama_service.query_ollama(
                 prompt=decision_prompt,
                 timeout=30.0,
-                model=settings.WEB_SEARCH_DECISION_MODEL,  # Use configurable model for quick decision
+                model=settings.DECISION_MODEL,  # Use configurable model for quick decision
             )
 
             # Parse the response
@@ -724,6 +744,228 @@ If should_search is true, provide 3-5 relevant search terms."""
         """
         search_results = await self.perform_web_search(query, engine)
         return self.format_search_results(search_results)
+
+    async def crawl_url_content(self, url: str) -> str:
+        """
+        Crawl content from a URL and extract clean text
+
+        Args:
+            url: URL to crawl
+
+        Returns:
+            Extracted text content
+        """
+        try:
+            print(f"[WebSearchService] Crawling content from URL: {url}")
+
+            # Handle DuckDuckGo redirect URLs
+            if url.startswith("//duckduckgo.com/l/?uddg="):
+                from urllib.parse import parse_qs, unquote
+
+                # Add protocol first
+                if url.startswith("//"):
+                    url = "https:" + url
+
+                try:
+                    if "uddg=" in url:
+                        # Extract the uddg parameter value
+                        uddg_start = url.find("uddg=") + 5
+                        uddg_end = url.find("&", uddg_start)
+                        if uddg_end == -1:
+                            uddg_value = url[uddg_start:]
+                        else:
+                            uddg_value = url[uddg_start:uddg_end]
+
+                        # Decode the URL
+                        decoded_url = unquote(uddg_value)
+                        url = decoded_url
+                        print(f"[WebSearchService] Decoded DuckDuckGo URL: {url}")
+                except Exception as e:
+                    print(f"[WebSearchService] Failed to decode DuckDuckGo URL: {e}")
+                    # Fall back to original URL
+                    pass
+
+            # Handle protocol-relative URLs
+            if url.startswith("//"):
+                url = "https:" + url
+                print(f"[WebSearchService] Added https protocol: {url}")
+
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+            }
+
+            async with httpx.AsyncClient(timeout=self.content_timeout) as client:
+                response = await client.get(url, headers=headers, follow_redirects=True)
+
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, "html.parser")
+
+                    # Remove script and style elements
+                    for script in soup(
+                        ["script", "style", "nav", "footer", "aside", "iframe"]
+                    ):
+                        script.decompose()
+
+                    # Try to find main content areas
+                    content_selectors = [
+                        "main",
+                        "article",
+                        ".content",
+                        "#content",
+                        ".main-content",
+                        ".article-content",
+                        ".post-content",
+                        ".entry-content",
+                        ".weather-info",
+                        ".weather-content",
+                        ".current-weather",
+                    ]
+
+                    content_text = ""
+                    for selector in content_selectors:
+                        content_area = soup.select_one(selector)
+                        if content_area:
+                            content_text = content_area.get_text(
+                                separator=" ", strip=True
+                            )
+                            break
+
+                    # If no specific content area found, get body text
+                    if not content_text:
+                        body = soup.find("body")
+                        if body:
+                            content_text = body.get_text(separator=" ", strip=True)
+                        else:
+                            content_text = soup.get_text(separator=" ", strip=True)
+
+                    # Clean up the text
+                    lines = (line.strip() for line in content_text.splitlines())
+                    chunks = (
+                        phrase.strip() for line in lines for phrase in line.split("  ")
+                    )
+                    content_text = " ".join(chunk for chunk in chunks if chunk)
+
+                    # Limit content length
+                    if len(content_text) > self.max_content_length:
+                        content_text = content_text[: self.max_content_length] + "..."
+
+                    print(
+                        f"[WebSearchService] Extracted {len(content_text)} characters from {url}"
+                    )
+                    return content_text
+                else:
+                    print(
+                        f"[WebSearchService] Failed to crawl {url}: HTTP {response.status_code}"
+                    )
+                    return f"Failed to access content (HTTP {response.status_code})"
+
+        except Exception as e:
+            print(f"[WebSearchService] Error crawling {url}: {e}")
+            return f"Error accessing content: {str(e)}"
+
+    async def perform_enhanced_web_search(
+        self, query: str, engine: str = "duckduckgo"
+    ) -> Dict[str, Any]:
+        """
+        Perform web search and crawl content from the top results
+
+        Args:
+            query: Search query
+            engine: Search engine to use
+
+        Returns:
+            Enhanced search results with crawled content
+        """
+        try:
+            print(f"[WebSearchService] Starting enhanced web search for: {query}")
+
+            # First, get search results
+            search_results = await self.perform_web_search(query, engine)
+
+            if search_results.get("status") != "success":
+                return search_results
+
+            results = search_results.get("results", [])
+            enhanced_results = []
+
+            # Crawl content from top 2-3 results
+            for i, result in enumerate(
+                results[:2]
+            ):  # Limit to first 2 to avoid taking too long
+                url = result.get("url", "")
+                if url and url != "No URL":
+                    print(
+                        f"[WebSearchService] Crawling result {i+1}: {result.get('title', 'No title')}"
+                    )
+                    content = await self.crawl_url_content(url)
+
+                    enhanced_result = result.copy()
+                    enhanced_result["content"] = content
+                    enhanced_results.append(enhanced_result)
+                else:
+                    enhanced_results.append(result)
+
+            # Add remaining results without content crawling
+            enhanced_results.extend(results[2:])
+
+            search_results["results"] = enhanced_results
+            search_results["content_crawled"] = True
+
+            return search_results
+
+        except Exception as e:
+            print(f"[WebSearchService] Error in enhanced web search: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return {
+                "status": "error",
+                "error": f"Enhanced web search failed: {str(e)}",
+                "results": [],
+                "query": query,
+                "engine": engine,
+            }
+
+    def format_enhanced_search_results(self, search_results: Dict[str, Any]) -> str:
+        """
+        Format enhanced search results with crawled content into a readable string
+
+        Args:
+            search_results: Enhanced search results from perform_enhanced_web_search
+
+        Returns:
+            Formatted search results string with content
+        """
+        if search_results.get("status") != "success":
+            return f"Web search failed: {search_results.get('error', 'Unknown error')}"
+
+        results = search_results.get("results", [])
+        if not results:
+            return "No search results found."
+
+        formatted = f"Web Search Results for '{search_results.get('query', '')}':\n\n"
+
+        for i, result in enumerate(
+            results[:2], 1
+        ):  # Show detailed content for first 2 results
+            title = result.get("title", "No title")
+            url = result.get("url", "No URL")
+            content = result.get("content", "")
+
+            formatted += f"Result {i}: {title}\n"
+            formatted += f"Source: {url}\n"
+
+            if content and content != "No snippet":
+                formatted += f"Content: {content}\n\n"
+            else:
+                snippet = result.get("snippet", "No snippet")
+                formatted += f"Summary: {snippet}\n\n"
+
+        return formatted
 
     async def _search_duckduckgo_html(self, query: str) -> Dict[str, Any]:
         """
