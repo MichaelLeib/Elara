@@ -97,6 +97,9 @@ A modern AI chat application with local model support via Ollama, featuring comp
 - **Accordion components** for organized information display
 - **Confirmation dialogs** for destructive actions
 
+
+
+
 > **🚀 Easiest way to try Elara:**
 >
 > ```bash
@@ -428,43 +431,7 @@ MIT License - see LICENSE file for details.
 - [Model Configuration](MODEL_CONFIGURATION_FEATURE.md)
 - [Development Guide](DEVELOPMENT.md)
 
-> **🚀 Easiest way to try Elara:**
->
-> ```bash
-> git clone https://github.com/yourusername/elara.git
-> cd elara
-> chmod +x install.sh download-models.sh
-> ./install.sh
-> ./download-models.sh
-> # Then open http://localhost:5173 in your browser
-> ```
 
----
-
-## 🧑‍💻 Try it with Docker (Recommended)
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/elara.git
-   cd elara
-   ```
-2. **Run the install script:**
-   ```bash
-   chmod +x install.sh
-   ./install.sh
-   ```
-3. **Download recommended AI models:**
-   ```bash
-   chmod +x download-models.sh
-   ./download-models.sh
-   ```
-4. **Open your browser:**
-   - Frontend: http://localhost:5173
-   - Backend API: http://localhost:8000
-
-> **Tip:** If you are on Mac/Windows, make sure Docker Desktop is running and has at least 8GB RAM allocated (see Docker Desktop > Settings > Resources).
-
----
 
 ## 🛑 Stopping and Cleaning Up
 
@@ -478,56 +445,6 @@ MIT License - see LICENSE file for details.
   ```
 
 ---
-
-## 🛠️ Manual Installation
-
-### Prerequisites
-
-- Node.js 18+ and npm
-- Python 3.8+ and pip
-- Ollama (for local model support)
-
-### Backend Setup
-
-```bash
-cd backend
-pip install -r requirements.txt
-
-# Install system dependencies (Ubuntu/Debian)
-sudo apt-get install poppler-utils tesseract-ocr
-
-# Start backend
-python -m uvicorn app.main:app --reload --port 8000
-```
-
-### Frontend Setup
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Ollama Setup
-
-1. Install Ollama from [ollama.ai](https://ollama.ai)
-2. Start Ollama service
-3. Download models through the settings dialog
-
----
-
-## 📦 Alternative: Single Executable
-
-For even easier distribution, you could create a single executable using PyInstaller or similar tools.
-
-## 🏆 Benefits of Docker Approach
-
-1. **No dependency conflicts** - Everything runs in isolated containers
-2. **Cross-platform** - Works on Windows, macOS, and Linux
-3. **Easy updates** - Just pull new images
-4. **Consistent environment** - Same setup everywhere
-5. **Easy cleanup** - Remove containers when done
-6. **Production ready** - Can be deployed to cloud services
 
 ## ⚙️ Configuration
 
